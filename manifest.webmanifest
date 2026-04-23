@@ -1,0 +1,20 @@
+{
+  "name": "Angelo Pescador — Idle Fishing",
+  "short_name": "Angelo Pescador",
+  "description": "Jogo idle de pesca com zonas oceânicas, melhorias e física de anzol em tempo real.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#020814",
+  "theme_color": "#0a3d62",
+  "lang": "pt-BR",
+  "icons": [
+    {
+      "src": "icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

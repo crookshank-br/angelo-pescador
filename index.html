@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="description" content="Jogo idle de pesca em HTML5: controle o anzol em tempo real, descubra 24 espécies, desbloqueie zonas profundas e evolua suas melhorias.">
+    <meta name="theme-color" content="#0a3d62">
+    <meta name="author" content="Angelo Pescador">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Angelo Pescador — Idle Fishing">
+    <meta property="og:description" content="Jogue pescaria idle no navegador: 24 peixes, 4 zonas oceânicas, física de anzol e muitas melhorias.">
+    <meta property="og:image" content="icon.svg">
+    <meta property="og:locale" content="pt_BR">
+
+    <!-- Twitter -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="Angelo Pescador — Idle Fishing">
+    <meta name="twitter:description" content="Jogue pescaria idle no navegador: 24 peixes, 4 zonas oceânicas, física de anzol e muitas melhorias.">
+    <meta name="twitter:image" content="icon.svg">
+
+    <title>Angelo Pescador — Idle Fishing</title>
+
+    <link rel="icon" type="image/svg+xml" href="icon.svg">
+    <link rel="apple-touch-icon" href="icon.svg">
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="game-container">
+        <!-- CENA (CANVAS) -->
+        <section class="ocean-panel" id="oceanPanel">
+            <canvas id="gameCanvas"></canvas>
+
+            <!-- UI OVERLAY -->
+            <header class="zone-header glass">
+                <span class="zone-label">ZONA ATUAL</span>
+                <h2 id="currentZone">Costa Rasa</h2>
+                <span class="depth-display">Profundidade até <span id="currentDepth">15</span>m</span>
+            </header>
+
+            <div class="catch-showcase" id="catchShowcase"></div>
+
+            <div class="cast-controls">
+                <button class="cast-button" id="castButton">
+                    <span class="cast-text">🎣 LANÇAR ANZOL</span>
+                    <span class="cast-progress" id="castProgress"></span>
+                </button>
+                <p class="controls-hint">
+                    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> mover anzol &nbsp;·&nbsp;
+                    <kbd>ESPAÇO</kbd> lançar
+                </p>
+            </div>
+        </section>
+
+        <!-- PAINEL LATERAL -->
+        <aside class="shop-panel">
+            <header class="status-panel">
+                <h1><span class="logo-mark">🎣</span> Angelo Pescador</h1>
+                <div class="stats">
+                    <div class="stat-card money">
+                        <span class="stat-label">Dinheiro</span>
+                        <span class="stat-value" id="money">$0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Total Pescado</span>
+                        <span class="stat-value" id="totalFish">0</span>
+                    </div>
+                    <div class="stat-card">
+                        <span class="stat-label">Lucro/min</span>
+                        <span class="stat-value" id="passiveIncome">$0</span>
+                    </div>
+                </div>
+            </header>
+
+            <div class="zone-selector">
+                <h3>Explorar Zonas</h3>
+                <div class="zones-grid" id="zonesGrid"></div>
+            </div>
+
+            <div class="upgrades-section">
+                <h3>Melhorias</h3>
+                <div class="upgrades-list" id="upgradesList"></div>
+            </div>
+
+            <div class="log-panel">
+                <h3>Diário do Pescador</h3>
+                <ul id="fishingLog"></ul>
+            </div>
+
+            <div class="controls">
+                <button id="saveBtn" class="control-btn">💾 Salvar</button>
+                <button id="resetBtn" class="control-btn danger">🔄 Reiniciar</button>
+            </div>
+        </aside>
+    </div>
+
+    <script src="main.js"></script>
+</body>
+</html>
