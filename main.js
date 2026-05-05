@@ -11,14 +11,14 @@
 // CONSTANTES
 // =================================================================
 const SAVE_KEY            = 'angeloPescadorSave_v3';
-const SESSION_BASE_MS     = 8000;
-const SPAWN_BASE_MS       = 1100;
-const HOOK_BASE_RADIUS    = 38;       // px
-const HOOK_SPEED          = 0.055;    // % por ms (mais controlado, exige mira)
+const SESSION_BASE_MS     = 6000;
+const SPAWN_BASE_MS       = 1800;
+const HOOK_BASE_RADIUS    = 30;       // px
+const HOOK_SPEED          = 0.035;    // % por ms (mais lento, exige pontaria)
 const HOOK_INITIAL_DEPTH  = 50;       // % da água
 const ROPE_SEGMENTS       = 26;
-const MAX_FISH_ON_SCREEN  = 18;
-const COOLDOWN_MS         = 1000;
+const MAX_FISH_ON_SCREEN  = 14;
+const COOLDOWN_MS         = 1500;
 
 // =================================================================
 // ZONAS
@@ -73,33 +73,33 @@ const FISH = [
 const UPGRADES = [
     {
         id: 'rod', name: 'Vara Reforçada', icon: '🎣',
-        desc: '+0.3s de duração por sessão de pesca',
-        baseCost: 12, costMultiplier: 1.18, maxLevel: 25,
+        desc: '+0.15s de duração por sessão de pesca',
+        baseCost: 20, costMultiplier: 1.22, maxLevel: 20,
     },
     {
         id: 'bait', name: 'Isca Especial', icon: '🪱',
         desc: 'Peixes aparecem mais rápido e raros mais frequentes',
-        baseCost: 75, costMultiplier: 1.20, maxLevel: 25,
+        baseCost: 120, costMultiplier: 1.25, maxLevel: 20,
     },
     {
         id: 'motor', name: 'Motor do Barco', icon: '⚙️',
         desc: 'Desbloqueia águas mais profundas',
-        baseCost: 350, costMultiplier: 1.32, maxLevel: 14,
+        baseCost: 500, costMultiplier: 1.38, maxLevel: 12,
     },
     {
         id: 'hook', name: 'Anzol Largo', icon: '🪝',
-        desc: '+12% área de captura · +5% chance de multi-captura',
-        baseCost: 600, costMultiplier: 1.22, maxLevel: 20,
+        desc: '+8% área de captura · +3% chance de multi-captura',
+        baseCost: 800, costMultiplier: 1.28, maxLevel: 15,
     },
     {
         id: 'net', name: 'Rede de Pesca', icon: '🕸️',
-        desc: 'Pesca passiva: 0.4 peixe/min por nível',
-        baseCost: 1000, costMultiplier: 1.25, maxLevel: 35,
+        desc: 'Pesca passiva: 0.15 peixe/min por nível',
+        baseCost: 1500, costMultiplier: 1.30, maxLevel: 25,
     },
     {
         id: 'value', name: 'Mercado Premium', icon: '💰',
-        desc: '+6% no valor de venda dos peixes',
-        baseCost: 1800, costMultiplier: 1.24, maxLevel: 25,
+        desc: '+4% no valor de venda dos peixes',
+        baseCost: 2500, costMultiplier: 1.30, maxLevel: 20,
     },
 ];
 
@@ -111,6 +111,40 @@ const RARITY_GLOW = {
     legendary: 'rgba(255, 179, 71, 1)',
 };
 const RARITY_SCORE = { common: 1, uncommon: 2, rare: 3, epic: 4, legendary: 5 };
+
+// =================================================================
+// CORES DOS PEIXES (cada espécie com paleta única: body, dark, belly, fin, accent)
+// =================================================================
+const FISH_COLORS = [
+    // ── COSTA RASA ── tons quentes e costeiros
+    ['#7EC8E3','#3A7CA5','#C5E8F7','#F0A050','#B8E2F2'],
+    ['#FFB347','#CC8030','#FFD699','#FF8C42','#FFE0B2'],
+    ['#90C7D9','#5A8A9C','#B8DCE8','#7AB0C4','#D0EAF2'],
+    ['#D2691E','#8B4513','#E8A87C','#A0522D','#F0C8A8'],
+    ['#6B8E9E','#4A6A7A','#A8C4D4','#8FA8B8','#C8DDE8'],
+    ['#7BA87C','#3A6A3B','#A8C8A8','#5A8A5B','#C8E0C8'],
+    // ── ARRECIFES ── vibrantes e tropicais
+    ['#FF6B35','#CC3300','#FFA07A','#FF4500','#FFC8B0'],
+    ['#4169E1','#2A4AAA','#87CEEB','#1E90FF','#B0D4F0'],
+    ['#4A6A5A','#2A4A3A','#8BAA9A','#6B8A7A','#B0C8B8'],
+    ['#FFD700','#CC8800','#FFEB3B','#FFA500','#FFF0A0'],
+    ['#DC143C','#8B0000','#FF6B6B','#B22222','#FFA0A0'],
+    ['#8B4513','#5C3010','#D2B48C','#A0522D','#E0C8A8'],
+    // ── MAR ABERTO ── cores oceânicas poderosas
+    ['#4A7FB5','#2A5080','#B0D0F0','#7AAAD5','#D0E4F8'],
+    ['#2A4A7A','#1A3050','#8AAACA','#4A6A9A','#B0C8E0'],
+    ['#3A6A9A','#204060','#B0D0F0','#7AAAD5','#D0E4F8'],
+    ['#C0C0C0','#808080','#F0F0F0','#E0E0E0','#FFFFFF'],
+    ['#4A6A3A','#2A4A1A','#8AAA7A','#6A8A5A','#B0C8A0'],
+    ['#3A3A3A','#1A1A1A','#9A9A9A','#6A6A6A','#C0C0C0'],
+    // ── FOSSA ABISSAL ── bioluminescentes e sombrias
+    ['#004466','#002233','#44AADD','#0077AA','#88CCEE'],
+    ['#661144','#440022','#CC6699','#993366','#EE88BB'],
+    ['#551133','#330011','#BB6688','#883355','#DD99AA'],
+    ['#003355','#001122','#4499DD','#1166AA','#88BBEE'],
+    ['#1A1A2E','#0A0A1E','#6A6A8E','#3A3A5E','#9A9ABA'],
+    ['#1A2A4A','#0A1A2A','#6A8AB0','#3A5A8A','#9AB0D0'],
+];
 
 // =================================================================
 // ESTADO PERSISTIDO + RUNTIME
@@ -138,25 +172,34 @@ const rt = {
     passiveAccumulator: 0,
     nextSpawnTime: 0,
     nextBubbleTime: 0,
+    seaweed: [],
+    ambientParticles: [],
+    nextAmbientTime: 0,
+    chests: [],
+    nextChestTime: 0,
+    combo: 0,
+    lastCatchTime: 0,
+    comboDisplayTimer: 0,
+    comboX: 0, comboY: 0,
 };
 
 // =================================================================
 // HELPERS DE ECONOMIA
 // =================================================================
 function calcCost(up, lvl) { return Math.floor(up.baseCost * Math.pow(up.costMultiplier, lvl)); }
-function getSessionDuration() { return SESSION_BASE_MS + state.upgrades.rod * 300; }
+function getSessionDuration() { return SESSION_BASE_MS + state.upgrades.rod * 150; }
 function getSpawnInterval()  {
-    const reduction = Math.pow(0.95, state.upgrades.bait);
-    return Math.max(280, SPAWN_BASE_MS * reduction);
+    const reduction = Math.pow(0.97, state.upgrades.bait);
+    return Math.max(500, SPAWN_BASE_MS * reduction);
 }
-function getHookRadius()     { return HOOK_BASE_RADIUS * (1 + state.upgrades.hook * 0.12); }
+function getHookRadius()     { return HOOK_BASE_RADIUS * (1 + state.upgrades.hook * 0.08); }
 function getMultiCatchChance() {
-    return Math.min(0.55, 0.03 + state.upgrades.hook * 0.05 + state.upgrades.bait * 0.012);
+    return Math.min(0.30, 0.01 + state.upgrades.hook * 0.03 + state.upgrades.bait * 0.008);
 }
-function getMaxExtras()        { return 2 + Math.floor(state.upgrades.hook / 6); }
-function getBaitRarityBonus()  { return Math.min(0.6, state.upgrades.bait * 0.04); }
-function getValueMultiplier()  { return 1 + state.upgrades.value * 0.06; }
-function getPassiveRate()      { return state.upgrades.net * 0.4; }
+function getMaxExtras()        { return 1 + Math.floor(state.upgrades.hook / 8); }
+function getBaitRarityBonus()  { return Math.min(0.35, state.upgrades.bait * 0.025); }
+function getValueMultiplier()  { return 1 + state.upgrades.value * 0.04; }
+function getPassiveRate()      { return state.upgrades.net * 0.15; }
 function isZoneUnlocked(id)    { return state.upgrades.motor >= ZONES[id].requiredMotor; }
 
 function fmtMoney(n) {
@@ -301,6 +344,34 @@ function drawSky() {
     g.addColorStop(1,    skyBot);
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, cw, waterY());
+
+    // Estrelas no céu da Fossa Abissal
+    if (state.currentZone === 3) {
+        for (let i = 0; i < 100; i++) {
+            const sx = (i * 137.5 + 42) % cw;
+            const sy = (i * 97.3 + 13) % (waterY() * 0.85);
+            const size = 0.5 + (i % 3) * 0.5;
+            const twinkle = 0.4 + 0.6 * Math.sin(t * 0.0012 + i * 2.7);
+            ctx.fillStyle = `rgba(255, 255, 255, ${twinkle * 0.6})`;
+            ctx.beginPath();
+            ctx.arc(sx, sy, size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        // Lua pálida
+        const mx = cw * 0.2, my = waterY() * 0.2;
+        const moonGrad = ctx.createRadialGradient(mx, my, 0, mx, my, 30);
+        moonGrad.addColorStop(0, 'rgba(220, 230, 255, 0.9)');
+        moonGrad.addColorStop(0.7, 'rgba(180, 200, 240, 0.6)');
+        moonGrad.addColorStop(1, 'rgba(180, 200, 240, 0)');
+        ctx.fillStyle = moonGrad;
+        ctx.beginPath();
+        ctx.arc(mx, my, 30, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.fillStyle = 'rgba(200, 215, 255, 0.85)';
+        ctx.beginPath();
+        ctx.arc(mx, my, 16, 0, Math.PI * 2);
+        ctx.fill();
+    }
 }
 
 function drawSun(t) {
@@ -400,27 +471,30 @@ function drawWater(t) {
 
 function drawCaustics(t) {
     const wy = waterY();
+    const zone = state.currentZone;
     ctx.save();
-    ctx.globalCompositeOperation = 'screen';
-    const numRays = 7;
-    for (let i = 0; i < numRays; i++) {
-        const baseX = (i / numRays) * cw + Math.sin(t * 0.0008 + i * 1.3) * 60;
-        const x1 = baseX;
-        const y1 = wy;
-        const x2 = baseX + Math.cos(t * 0.0005 + i * 1.7) * 40;
-        const y2 = wy + 320;
-        const g = ctx.createLinearGradient(x1, y1, x2, y2);
-        const intensity = 0.10 - state.currentZone * 0.018;
-        g.addColorStop(0, `rgba(255, 255, 220, ${Math.max(0, intensity)})`);
-        g.addColorStop(1, 'rgba(255, 255, 220, 0)');
-        ctx.fillStyle = g;
-        ctx.beginPath();
-        ctx.moveTo(x1 - 12, y1);
-        ctx.lineTo(x1 + 12, y1);
-        ctx.lineTo(x2 + 32, y2);
-        ctx.lineTo(x2 - 32, y2);
-        ctx.closePath();
-        ctx.fill();
+    if (zone < 3) {
+        ctx.globalCompositeOperation = 'screen';
+        const numRays = zone === 0 ? 8 : 6;
+        for (let i = 0; i < numRays; i++) {
+            const baseX = (i / numRays) * cw + Math.sin(t * 0.0008 + i * 1.3) * 50;
+            const x1 = baseX;
+            const y1 = wy;
+            const x2 = baseX + Math.cos(t * 0.0005 + i * 1.7) * (zone === 0 ? 40 : 20);
+            const y2 = wy + (zone === 0 ? 350 : 200);
+            const g = ctx.createLinearGradient(x1, y1, x2, y2);
+            const baseIntensity = [0.12, 0.07, 0.03, 0][zone];
+            g.addColorStop(0, `rgba(255, 255, 220, ${baseIntensity})`);
+            g.addColorStop(1, 'rgba(255, 255, 220, 0)');
+            ctx.fillStyle = g;
+            ctx.beginPath();
+            ctx.moveTo(x1 - (zone === 0 ? 16 : 8), y1);
+            ctx.lineTo(x1 + (zone === 0 ? 16 : 8), y1);
+            ctx.lineTo(x2 + (zone === 0 ? 40 : 20), y2);
+            ctx.lineTo(x2 - (zone === 0 ? 40 : 20), y2);
+            ctx.closePath();
+            ctx.fill();
+        }
     }
     ctx.restore();
 }
@@ -474,6 +548,18 @@ function updateFish(delta) {
         f.y += Math.sin(f.bobPhase) * 0.18;
         f.rotation = Math.sin(f.bobPhase) * 0.06 * (f.flipped ? -1 : 1);
 
+        // Peixes raros+ fogem do anzol
+        if (rt.fishingActive && !rt.hookDescending && f.fish.rarity !== 'common') {
+            const hp = hookPxPos();
+            const dist = Math.hypot(hp.x - f.x, hp.y - f.y);
+            if (dist < 200) {
+                const intensity = (1 - dist / 200) * (f.fish.rarity === 'legendary' ? 4 : f.fish.rarity === 'epic' ? 2.5 : 1.5);
+                f.vx *= (1 + intensity * dt);
+                const cap = Math.abs(f.vx) * 2.5;
+                if (Math.abs(f.vx) > cap) f.vx = Math.sign(f.vx) * cap;
+            }
+        }
+
         // Colisão com anzol
         if (rt.fishingActive && !rt.hookDescending) {
             const hp = hookPxPos();
@@ -496,27 +582,129 @@ function drawFish(f) {
     ctx.rotate(f.rotation);
     if (f.flipped) ctx.scale(-1, 1);
 
-    // Sombra de contato no fundo
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.18)';
+    const s = f.fish.size;
+    const idx = FISH.indexOf(f.fish);
+    const col = idx >= 0 ? FISH_COLORS[idx] : null;
+    const bodyLen = s * 0.50;
+    const bodyH = s * 0.20;
+    const tailLen = s * 0.16;
+
+    // Sombra no fundo
+    ctx.fillStyle = 'rgba(0,0,0,0.12)';
     ctx.beginPath();
-    ctx.ellipse(0, f.fish.size * 0.45, f.fish.size * 0.4, 4, 0, 0, Math.PI * 2);
+    ctx.ellipse(0, bodyH + 5, bodyLen * 0.5, 3, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Glow por raridade
-    const glow = RARITY_GLOW[f.fish.rarity];
-    if (glow) {
-        ctx.shadowColor = glow;
-        ctx.shadowBlur = f.fish.rarity === 'legendary' ? 26 : (f.fish.rarity === 'epic' ? 18 : 12);
+    // Cauda
+    if (col) {
+        ctx.fillStyle = col[3];
     } else {
-        ctx.shadowColor = 'rgba(0, 0, 0, 0.5)';
-        ctx.shadowBlur = 5;
-        ctx.shadowOffsetY = 2;
+        ctx.fillStyle = 'rgba(200,200,200,0.6)';
+    }
+    ctx.beginPath();
+    ctx.moveTo(-bodyLen * 0.35, 0);
+    ctx.lineTo(-bodyLen * 0.35 - tailLen, -bodyH * 0.9);
+    ctx.lineTo(-bodyLen * 0.35 - tailLen * 0.5, 0);
+    ctx.lineTo(-bodyLen * 0.35 - tailLen, bodyH * 0.9);
+    ctx.closePath();
+    ctx.fill();
+
+    // Corpo com gradiente
+    if (col) {
+        const bg = ctx.createRadialGradient(-bodyLen*0.1, -bodyH*0.3, 1, 0, 0, bodyLen*0.5);
+        bg.addColorStop(0,   col[2]);
+        bg.addColorStop(0.4, col[0]);
+        bg.addColorStop(1,   col[1]);
+        ctx.fillStyle = bg;
+    } else {
+        ctx.fillStyle = 'rgba(150,190,220,0.7)';
+    }
+    ctx.beginPath();
+    ctx.ellipse(0, 0, bodyLen * 0.5, bodyH, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nadadeira dorsal
+    if (col) {
+        ctx.fillStyle = col[3];
+        ctx.globalAlpha = 0.7;
+        ctx.beginPath();
+        ctx.moveTo(bodyLen * 0.15, -bodyH * 0.7);
+        ctx.quadraticCurveTo(bodyLen * 0.32, -bodyH * 1.35, bodyLen * 0.42, -bodyH * 0.7);
+        ctx.fill();
+        ctx.globalAlpha = 1;
     }
 
-    ctx.font = `${f.fish.size}px "Segoe UI Emoji", "Apple Color Emoji", "Noto Color Emoji", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillText(f.fish.emoji, 0, 0);
+    // Listras decorativas (em alguns peixes)
+    if (col && idx % 4 < 2 && col[4]) {
+        ctx.strokeStyle = col[4];
+        ctx.lineWidth = Math.max(1, s * 0.025);
+        ctx.globalAlpha = 0.35;
+        for (let si = 0; si < 2; si++) {
+            const ox = -bodyLen * 0.15 + si * bodyLen * 0.12;
+            ctx.beginPath();
+            ctx.moveTo(ox, -bodyH * 0.3);
+            ctx.lineTo(ox + bodyLen * 0.15, bodyH * 0.2);
+            ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+    }
+
+    // Olho
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(bodyLen * 0.24, -bodyH * 0.22, bodyH * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#1a1a2e';
+    ctx.beginPath();
+    ctx.arc(bodyLen * 0.27, -bodyH * 0.18, bodyH * 0.14, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(bodyLen * 0.30, -bodyH * 0.25, bodyH * 0.06, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Glow por raridade ao redor do peixe
+    const glow = RARITY_GLOW[f.fish.rarity];
+    if (glow) {
+        ctx.save();
+        ctx.shadowColor = glow;
+        ctx.shadowBlur = f.fish.rarity === 'legendary' ? 22 : (f.fish.rarity === 'epic' ? 14 : 8);
+        ctx.globalAlpha = 0.5;
+        ctx.strokeStyle = glow;
+        ctx.lineWidth = 1.2;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bodyLen * 0.5 + 2, bodyH + 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    }
+
+    // Indicador de raridade (estrelas acima de peixes raros+)
+    if (f.fish.rarity === 'legendary') {
+        const shimmer = 0.5 + 0.5 * Math.sin(rt.time * 0.008);
+        ctx.save();
+        ctx.fillStyle = `rgba(255, 179, 71, ${shimmer})`;
+        ctx.font = '14px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('⭐', 0, -bodyH * 2);
+        ctx.restore();
+    } else if (f.fish.rarity === 'epic') {
+        const shimmer = 0.4 + 0.4 * Math.sin(rt.time * 0.006);
+        ctx.save();
+        ctx.fillStyle = `rgba(187, 134, 252, ${shimmer})`;
+        ctx.font = '11px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('✦', 0, -bodyH * 1.8);
+        ctx.restore();
+    } else if (f.fish.rarity === 'rare') {
+        const shimmer = 0.3 + 0.3 * Math.sin(rt.time * 0.005);
+        ctx.save();
+        ctx.fillStyle = `rgba(78, 205, 196, ${shimmer})`;
+        ctx.font = '9px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('♦', 0, -bodyH * 1.6);
+        ctx.restore();
+    }
+
     ctx.restore();
 }
 
@@ -604,14 +792,61 @@ function drawBoat(t) {
     ctx.lineTo( hullW/2 - 4, -hullH/2);
     ctx.stroke();
 
-    // Pescador (emoji)
-    ctx.font = '46px "Segoe UI Emoji", "Apple Color Emoji", sans-serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.45)';
-    ctx.shadowBlur = 5;
-    ctx.shadowOffsetY = 3;
-    ctx.fillText('🧑‍🦰', -16, -hullH/2 + 6);
+    // Pescador desenhado no canvas
+    const px = -16, py = -hullH/2 + 6;
+
+    // Chapéu
+    ctx.fillStyle = '#C0392B';
+    ctx.shadowColor = 'rgba(0,0,0,0.3)';
+    ctx.shadowBlur = 4;
+    ctx.shadowOffsetY = 2;
+    ctx.beginPath();
+    ctx.ellipse(px, py - 10, 14, 4, 0, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillRect(px - 7, py - 22, 14, 12);
+    ctx.fillStyle = '#E74C3C';
+    ctx.fillRect(px - 7, py - 22, 14, 3);
+
+    // Rosto
+    ctx.fillStyle = '#F5D0A9';
+    ctx.beginPath();
+    ctx.ellipse(px, py - 10, 8, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Olhos
+    ctx.fillStyle = '#222';
+    ctx.beginPath();
+    ctx.arc(px - 3, py - 12, 1.5, 0, Math.PI * 2);
+    ctx.arc(px + 3, py - 12, 1.5, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Sorriso
+    ctx.strokeStyle = '#8B4513';
+    ctx.lineWidth = 1.2;
+    ctx.beginPath();
+    ctx.arc(px, py - 7, 4, 0.1, Math.PI - 0.1);
+    ctx.stroke();
+
+    // Braço direito (segurando a vara)
+    ctx.strokeStyle = '#F5D0A9';
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(px + 6, py - 4);
+    ctx.lineTo(px + 14, py - 14);
+    ctx.stroke();
+
+    // Colete salva-vidas
+    ctx.fillStyle = '#2980B9';
+    ctx.shadowBlur = 2;
+    ctx.fillRect(px - 8, py - 4, 16, 12);
+    ctx.strokeStyle = '#1A5276';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(px - 8, py - 4, 16, 12);
+    // Faixas refletivas
+    ctx.fillStyle = '#FFD700';
+    ctx.fillRect(px - 8, py, 16, 2);
+    ctx.fillRect(px - 8, py + 4, 16, 2);
 
     // Vara de pesca (canvas-drawn, fina e clara)
     ctx.shadowBlur = 0;
@@ -753,6 +988,188 @@ function drawParticles() {
 }
 
 // =================================================================
+// ALGAS MARINHAS (animadas com seno)
+// =================================================================
+function initSeaweed() {
+    rt.seaweed = [];
+    const count = 6 + Math.floor(Math.random() * 5);
+    for (let i = 0; i < count; i++) {
+        const h = 80 + Math.random() * 180;
+        rt.seaweed.push({
+            x: Math.random() * cw,
+            h,
+            segs: 5 + Math.floor(Math.random() * 3),
+            phase: Math.random() * Math.PI * 2,
+            speed: 0.0008 + Math.random() * 0.0015,
+            thick: 3 + Math.random() * 3,
+            hue: 110 + Math.random() * 50,
+        });
+    }
+}
+
+function drawSeaweed(t) {
+    const wy = waterY();
+    const wh = waterHeight();
+    const bottom = wy + wh;
+    for (const alga of rt.seaweed) {
+        const segH = alga.h / alga.segs;
+        ctx.save();
+        ctx.strokeStyle = `hsla(${alga.hue}, ${45 + Math.sin(alga.phase) * 15}%, ${18 + Math.sin(alga.phase * 0.7) * 8}%, 0.7)`;
+        ctx.lineWidth = alga.thick;
+        ctx.lineCap = 'round';
+        ctx.beginPath();
+        ctx.moveTo(alga.x, bottom);
+        for (let s = 1; s <= alga.segs; s++) {
+            const sy = bottom - s * segH;
+            const sway = Math.sin(t * alga.speed + alga.phase + s * 0.5) * (s / alga.segs) * 18;
+            ctx.lineTo(alga.x + sway, sy);
+        }
+        ctx.stroke();
+
+        ctx.strokeStyle = `hsla(${alga.hue + 20}, 30%, 25%, 0.4)`;
+        ctx.lineWidth = alga.thick * 0.5;
+        ctx.beginPath();
+        ctx.moveTo(alga.x + 3, bottom);
+        for (let s = 1; s <= alga.segs; s++) {
+            const sy = bottom - s * segH;
+            const sway = Math.sin(t * alga.speed + alga.phase + s * 0.5 + 0.3) * (s / alga.segs) * 14 + 3;
+            ctx.lineTo(alga.x + sway, sy);
+        }
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// =================================================================
+// PARTÍCULAS AMBIENTES (plâncton / detritos flutuando)
+// =================================================================
+function spawnAmbientParticle() {
+    rt.ambientParticles.push({
+        x: Math.random() * cw,
+        y: waterY() + Math.random() * waterHeight(),
+        vx: -10 + Math.random() * 20,
+        vy: -3 + Math.random() * 6,
+        size: 1 + Math.random() * 2.5,
+        life: 4000 + Math.random() * 6000,
+        maxLife: 10000,
+        alpha: 0.15 + Math.random() * 0.35,
+        hue: 160 + Math.random() * 80,
+    });
+}
+
+function updateAmbient(delta) {
+    const dt = delta * 0.001;
+    for (let i = rt.ambientParticles.length - 1; i >= 0; i--) {
+        const p = rt.ambientParticles[i];
+        p.x += p.vx * dt;
+        p.y += p.vy * dt;
+        p.life -= delta;
+        if (p.life <= 0 || p.x < -20 || p.x > cw + 20) rt.ambientParticles.splice(i, 1);
+    }
+}
+
+function drawAmbient() {
+    ctx.save();
+    for (const p of rt.ambientParticles) {
+        const a = Math.min(p.alpha, p.life / p.maxLife * p.alpha);
+        ctx.fillStyle = `hsla(${p.hue}, 60%, 70%, ${a})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2);
+        ctx.fill();
+    }
+    ctx.restore();
+}
+
+// =================================================================
+// BAÚS DO TESOURO
+// =================================================================
+function spawnChest() {
+    const wy = waterY();
+    const wh = waterHeight();
+    rt.chests.push({
+        x: 40 + Math.random() * (cw - 80),
+        y: wy + Math.random() * wh * 0.6,
+        bobPhase: Math.random() * Math.PI * 2,
+        life: 8000 + Math.random() * 4000,
+        glow: 0,
+    });
+}
+
+function updateChests(delta) {
+    const dt = delta * 0.001;
+    for (let i = rt.chests.length - 1; i >= 0; i--) {
+        const c = rt.chests[i];
+        c.bobPhase += delta * 0.002;
+        c.y += Math.sin(c.bobPhase) * 0.25;
+        c.life -= delta;
+        c.glow = 0.6 + 0.4 * Math.sin(rt.time * 0.004);
+
+        if (rt.fishingActive && !rt.hookDescending) {
+            const hp = hookPxPos();
+            const dx = hp.x - c.x;
+            const dy = hp.y - c.y;
+            if (dx * dx + dy * dy < 900) {
+                const valor = 150 + Math.floor(Math.random() * 350) * (1 + state.upgrades.bait * 0.05);
+                state.money += valor;
+                emitSparkles(c.x, c.y, '#ffd700', 25);
+                rt.cameraShake = 5;
+                addLog(`🎁 Baú do tesouro! +${fmtMoney(valor)}`);
+                showBigCatch({ name: 'Baú do Tesouro', emoji: '🎁', rarity: 'rare', size: 0 },
+                    valor, 1);
+                rt.chests.splice(i, 1);
+                continue;
+            }
+        }
+
+        if (c.life <= 0) rt.chests.splice(i, 1);
+    }
+}
+
+function drawChests(t) {
+    const currentTime = rt.time;
+    for (const c of rt.chests) {
+        ctx.save();
+        ctx.translate(c.x, c.y);
+
+        // Brilho dourado pulsante
+        const g = ctx.createRadialGradient(0, 0, 0, 0, 0, 36);
+        g.addColorStop(0, `rgba(255, 215, 0, ${c.glow * 0.25})`);
+        g.addColorStop(1, 'rgba(255, 215, 0, 0)');
+        ctx.fillStyle = g;
+        ctx.beginPath();
+        ctx.arc(0, 0, 36, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Corpo do baú
+        ctx.shadowColor = 'rgba(255, 215, 0, 0.4)';
+        ctx.shadowBlur = 10;
+        ctx.fillStyle = '#8B4513';
+        ctx.fillRect(-16, -10, 32, 20);
+        ctx.fillStyle = '#A0522D';
+        ctx.fillRect(-14, -8, 28, 16);
+
+        // Tampa
+        ctx.fillStyle = '#6B3410';
+        ctx.beginPath();
+        ctx.moveTo(-18, -10);
+        ctx.lineTo(0, -18);
+        ctx.lineTo(18, -10);
+        ctx.closePath();
+        ctx.fill();
+
+        // Fechadura
+        ctx.fillStyle = '#FFD700';
+        ctx.shadowColor = 'rgba(255, 215, 0, 0.7)';
+        ctx.shadowBlur = 6;
+        ctx.fillRect(-3, -3, 6, 6);
+        ctx.fillRect(-1, -7, 2, 4);
+
+        ctx.shadowBlur = 0;
+        ctx.restore();
+    }
+}
+
+// =================================================================
 // LÓGICA DE PESCA
 // =================================================================
 function startFishing() {
@@ -784,10 +1201,32 @@ function catchFishInteractive(fish) {
     let count = 1;
     const maxExtras = getMaxExtras();
     while (count <= maxExtras && Math.random() < chance) count++;
+
+    // Sistema de combo: capturas rápidas em sequência
+    const now = performance.now();
+    if (now - rt.lastCatchTime < 2500 && rt.combo > 0) {
+        rt.combo++;
+    } else {
+        rt.combo = 1;
+    }
+    rt.lastCatchTime = now;
+    const comboMult = 1 + (rt.combo - 1) * 0.2;
+
     let total = 0;
     for (let i = 0; i < count; i++) total += sellFish(fish.fish);
+    total = Math.floor(total * comboMult);
+
     showBigCatch(fish.fish, total, count);
-    addLog(`${fish.fish.emoji} ${fish.fish.name} ×${count} (+${fmtMoney(total)})`);
+    const comboStr = rt.combo > 1 ? ` 🔥 Combo x${rt.combo}` : '';
+    addLog(`${fish.fish.emoji} ${fish.fish.name} ×${count} (+${fmtMoney(total)})${comboStr}`);
+
+    // Display visual do combo
+    if (rt.combo > 1) {
+        rt.comboDisplayTimer = 1800;
+        const hp = hookPxPos();
+        rt.comboX = hp.x;
+        rt.comboY = hp.y - 40;
+    }
 
     const hp = hookPxPos();
     const color = fish.fish.rarity === 'legendary' ? '#ffb347'
@@ -825,6 +1264,12 @@ function tickFishing(now, delta) {
     if (now >= rt.nextSpawnTime) {
         spawnFish();
         rt.nextSpawnTime = now + getSpawnInterval();
+    }
+
+    // Spawn de baús do tesouro (raro)
+    if (now >= rt.nextChestTime) {
+        if (Math.random() < 0.35) spawnChest();
+        rt.nextChestTime = now + 8000 + Math.random() * 12000;
     }
 
     const remaining = rt.sessionEndTime - now;
@@ -1058,10 +1503,17 @@ function gameLoop(now) {
     updateFish(delta);
     updateBubbles(delta);
     updateParticles(delta);
+    updateAmbient(delta);
+    updateChests(delta);
 
     if (now > rt.nextBubbleTime) {
         spawnBubble();
         rt.nextBubbleTime = now + 350 + Math.random() * 400;
+    }
+
+    if (now > rt.nextAmbientTime) {
+        spawnAmbientParticle();
+        rt.nextAmbientTime = now + 800 + Math.random() * 1200;
     }
 
     if (rt.cameraShake > 0) rt.cameraShake = Math.max(0, rt.cameraShake - delta * 0.04);
@@ -1086,6 +1538,9 @@ function gameLoop(now) {
     for (const f of rt.activeFish) drawFish(f);
 
     drawDepthFog();
+    drawChests(rt.time);
+    drawSeaweed(rt.time);
+    drawAmbient();
     drawBubbles();
     drawBoat(rt.time);
 
@@ -1096,6 +1551,31 @@ function gameLoop(now) {
     }
 
     drawParticles();
+
+    // Display visual do combo
+    if (rt.comboDisplayTimer > 0) {
+        rt.comboDisplayTimer -= delta;
+        const alpha = Math.min(1, rt.comboDisplayTimer / 600);
+        const scale = 1 + (1 - alpha) * 0.3;
+        ctx.save();
+        ctx.translate(rt.comboX, rt.comboY);
+        ctx.scale(scale, scale);
+        ctx.globalAlpha = alpha;
+        ctx.fillStyle = '#ff6b35';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.shadowColor = 'rgba(255, 107, 53, 0.8)';
+        ctx.shadowBlur = 15;
+        ctx.fillText(`🔥 COMBO x${rt.combo}`, 0, 0);
+        ctx.fillStyle = '#fff';
+        ctx.shadowBlur = 8;
+        ctx.shadowColor = 'rgba(0,0,0,0.5)';
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillText(`🔥 COMBO x${rt.combo}`, 0, 0);
+        ctx.restore();
+    }
+
     ctx.restore();
 
     requestAnimationFrame(gameLoop);
@@ -1147,6 +1627,7 @@ function init() {
 
     setupInput();
     initRope();
+    initSeaweed();
 
     setInterval(slowUpdate, 250);
     setInterval(autoSave, 15000);
