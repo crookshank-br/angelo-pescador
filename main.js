@@ -60,13 +60,13 @@ const FISH = [
     { name: 'Tartaruga Marinha', emoji: '🐢', baseValue: 8000,   rarity: 'epic',      zones: [2],       weight: 4,   speed: 0.5, size: 56 },
     { name: 'Tubarão Branco',    emoji: '🦈', baseValue: 14000,  rarity: 'epic',      zones: [2, 3],    weight: 3,   speed: 1.8, size: 62 },
 
-    // ── FOSSA ABISSAL ── criaturas exóticas e raríssimas
-    { name: 'Peixe-Lanterna',    emoji: '🐟', baseValue: 9000,   rarity: 'rare',      zones: [3],       weight: 22,  speed: 1.0, size: 36 },
-    { name: 'Lula Colossal',     emoji: '🦑', baseValue: 22000,  rarity: 'epic',      zones: [3],       weight: 9,   speed: 1.0, size: 58 },
-    { name: 'Kraken',            emoji: '🐙', baseValue: 45000,  rarity: 'epic',      zones: [3],       weight: 5,   speed: 0.8, size: 64 },
-    { name: 'Peixe-Dragão',      emoji: '🐉', baseValue: 75000,  rarity: 'legendary', zones: [3],       weight: 2.5, speed: 1.6, size: 66, bossHp: 2 },
-    { name: 'Tubarão-Fantasma',  emoji: '🦈', baseValue: 130000, rarity: 'legendary', zones: [3],       weight: 1.2, speed: 2.0, size: 72, bossHp: 3 },
-    { name: 'Baleia Azul',       emoji: '🐋', baseValue: 320000, rarity: 'legendary', zones: [3],       weight: 0.3, speed: 0.7, size: 92, bossHp: 4 },
+    // ── FOSSA ABISSAL ── criaturas exóticas e raríssimas (valores /2 vs original)
+    { name: 'Peixe-Lanterna',    emoji: '🐟', baseValue: 5000,   rarity: 'rare',      zones: [3],       weight: 22,  speed: 1.0, size: 36 },
+    { name: 'Lula Colossal',     emoji: '🦑', baseValue: 11000,  rarity: 'epic',      zones: [3],       weight: 9,   speed: 1.0, size: 58 },
+    { name: 'Kraken',            emoji: '🐙', baseValue: 22000,  rarity: 'epic',      zones: [3],       weight: 5,   speed: 0.8, size: 64 },
+    { name: 'Peixe-Dragão',      emoji: '🐉', baseValue: 37000,  rarity: 'legendary', zones: [3],       weight: 2.5, speed: 1.6, size: 66, bossHp: 2 },
+    { name: 'Tubarão-Fantasma',  emoji: '🦈', baseValue: 65000,  rarity: 'legendary', zones: [3],       weight: 1.2, speed: 2.0, size: 72, bossHp: 3 },
+    { name: 'Baleia Azul',       emoji: '🐋', baseValue: 160000, rarity: 'legendary', zones: [3],       weight: 0.3, speed: 0.7, size: 92, bossHp: 4 },
 ];
 
 // =================================================================
@@ -104,7 +104,7 @@ const UPGRADES = [
     },
     {
         id: 'net', name: 'Rede de Pesca', icon: '🕸️',
-        desc: 'Pesca passiva: 0.15 peixe/min por nível',
+        desc: 'Pesca passiva: 0.10 peixe/min por nível',
         baseCost: 2500, costMultiplier: 1.28, maxLevel: 25,
         // era 1500/1.30/25 → total ~$4.4M (principal sink da Fossa)
     },
@@ -117,9 +117,9 @@ const UPGRADES = [
     {
         id: 'abyss', name: 'Batiscafo Abissal', icon: '🔭',
         desc: '+10% no valor de todos os peixes por nível',
-        baseCost: 30000, costMultiplier: 1.50, maxLevel: 8,
+        baseCost: 50000, costMultiplier: 1.55, maxLevel: 8,
         requiredMotor: 12,
-        // exclusivo da Fossa · total ~$1.5M · último nível $512k
+        // exclusivo da Fossa · total ~$2.3M · último nível $855k
     },
 ];
 
@@ -433,7 +433,7 @@ function getValueMultiplier()  {
          * (1 + (state.upgrades.abyss || 0) * 0.10)
          * getPearlValueMult();
 }
-function getPassiveRate()      { return state.upgrades.net * 0.15 * (1 + (state.pearlBonuses?.spawn || 0) * 0.05); }
+function getPassiveRate()      { return state.upgrades.net * 0.10 * (1 + (state.pearlBonuses?.spawn || 0) * 0.05); }
 function isZoneUnlocked(id)    { return state.upgrades.motor >= ZONES[id].requiredMotor; }
 
 // === PRESTÍGIO (PÉROLAS) ===
@@ -2055,7 +2055,7 @@ function updateStats() {
         const pool = FISH.filter(f => f.zones.includes(bestZone));
         const tw = pool.reduce((s, f) => s + f.weight, 0);
         const avg = pool.reduce((s, f) => s + f.baseValue * f.weight, 0) / (tw || 1);
-        DOM.passiveIncome.textContent = fmtMoney(rate * avg * getValueMultiplier() * getPearlValueMult());
+        DOM.passiveIncome.textContent = fmtMoney(rate * avg * getValueMultiplier()); // getPearlValueMult já está dentro de getValueMultiplier
     } else {
         DOM.passiveIncome.textContent = '— rede';
     }
