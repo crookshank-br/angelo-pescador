@@ -976,7 +976,11 @@ function updateFish(delta) {
                 continue;
             }
         }
-        if (f.x < -100 || f.x > cw + 100) rt.activeFish.splice(i, 1);
+        if (f.x < -100 || f.x > cw + 100) {
+            rt.activeFish.splice(i, 1);
+            // Peixe escapou sem ser capturado → combo quebra
+            if (rt.fishingActive) rt.combo = 0;
+        }
     }
 }
 
