@@ -1856,11 +1856,11 @@ function buildCompendium() {
     if (!grid) return;
     grid.innerHTML = '';
     FISH.forEach((f, i) => {
+        const caught = (state._speciesCaught || {})[f.name];
         const cell = document.createElement('div');
         cell.className = 'comp-cell';
         cell.dataset.index = i;
         cell.title = caught ? `${f.name} · ${f.rarity} · ${fmtMoney(f.baseValue)}` : '???';
-        const caught = (state._speciesCaught || {})[f.name];
         cell.innerHTML = `
             <span class="comp-emoji">${caught ? f.emoji : '❓'}</span>
             <span class="comp-rarity comp-rarity-${f.rarity}"></span>
