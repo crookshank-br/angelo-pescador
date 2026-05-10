@@ -10,15 +10,16 @@
 // =================================================================
 // CONSTANTES
 // =================================================================
-const SAVE_KEY            = 'angeloPescadorSave_v3';
+const SAVE_KEY            = 'angeloPescadorSave_v4';
 const SESSION_BASE_MS     = 6000;
 const SPAWN_BASE_MS       = 1800;
 const HOOK_BASE_RADIUS    = 30;       // px
 const HOOK_SPEED          = 0.035;    // % por ms (mais lento, exige pontaria)
 const HOOK_INITIAL_DEPTH  = 50;       // % da água
+const HOOK_DESCENT_MS     = 600;      // tempo do anzol descer
 const ROPE_SEGMENTS       = 26;
 const MAX_FISH_ON_SCREEN  = 14;
-const COOLDOWN_MS         = 1500;
+const COOLDOWN_MS         = 2000;     // 2s pra animação acabar
 
 // =================================================================
 // ZONAS
@@ -41,6 +42,7 @@ const FISH = [
     { name: 'Caranguejo',        emoji: '🦀', baseValue: 22,     rarity: 'uncommon',  zones: [0, 1],    weight: 16,  speed: 0.6, size: 32 },
     { name: 'Cavalinha',         emoji: '🐟', baseValue: 30,     rarity: 'uncommon',  zones: [0, 1],    weight: 22,  speed: 1.4, size: 30 },
     { name: 'Robalo',            emoji: '🐡', baseValue: 50,     rarity: 'uncommon',  zones: [0, 1],    weight: 12,  speed: 0.9, size: 34 },
+    { name: 'Peixe-Espelho',     emoji: '🐟', baseValue: 90,     rarity: 'rare',      zones: [0, 1],    weight: 5,   speed: 1.2, size: 32 },
 
     // ── ARRECIFES ── coloridos, médio porte
     { name: 'Peixe-Palhaço',     emoji: '🐠', baseValue: 80,     rarity: 'uncommon',  zones: [1],       weight: 32,  speed: 1.0, size: 32 },
@@ -291,6 +293,7 @@ const FISH_COLORS = [
     ['#D2691E','#8B4513','#E8A87C','#A0522D','#F0C8A8'],
     ['#6B8E9E','#4A6A7A','#A8C4D4','#8FA8B8','#C8DDE8'],
     ['#7BA87C','#3A6A3B','#A8C8A8','#5A8A5B','#C8E0C8'],
+    ['#E0F0FF','#7AAACC','#FFFFFF','#B0D8E8','#F8FBFF'],   // Peixe-Espelho — prata reflexivo
     // ── ARRECIFES ── vibrantes e tropicais
     ['#FF6B35','#CC3300','#FFA07A','#FF4500','#FFC8B0'],
     ['#4169E1','#2A4AAA','#87CEEB','#1E90FF','#B0D4F0'],
@@ -324,6 +327,18 @@ let state = {
     achievements: {},
     _speciesCaught: {},
     _legendaryCaught: false,
+    // Prestígio
+    pearls: 0,
+    totalEarned: 0,        // dinheiro acumulado vitalício (não decrementa em compras)
+    pearlBonuses: { value: 0, spawn: 0, multi: 0 },  // upgrades comprados com pérolas
+    // Stats
+    _biggestCatch: null,
+    _maxCombo: 0,
+    _playTime: 0,
+    // Missões diárias
+    quests: { date: '', list: [] },
+    // Itens consumíveis
+    consumables: { extraBait: 0, magnify: 0, chronometer: 0 },
 };
 
 const rt = {
@@ -356,26 +371,56 @@ const rt = {
     paused: false,
     zoneTransition: 0,
     netLogAccum: { count: 0, value: 0, timer: 0 },
+    eventActive: null,
+    nextEventCheck: 0,
 };
 
 // =================================================================
 // HELPERS DE ECONOMIA
 // =================================================================
 function calcCost(up, lvl) { return Math.floor(up.baseCost * Math.pow(up.costMultiplier, lvl)); }
-function getSessionDuration() { return SESSION_BASE_MS + state.upgrades.rod * 250; }
+function getSessionDuration() {
+    let dur = SESSION_BASE_MS + state.upgrades.rod * 250;
+    if (rt.consumableActive?.type === 'chronometer') dur *= 1.5;
+    return dur;
+}
 function getSpawnInterval()  {
-    const reduction = Math.pow(0.97, state.upgrades.bait);
-    return Math.max(500, SPAWN_BASE_MS * reduction);
+    const reduction = Math.pow(0.95, state.upgrades.bait);
+    let interval = SPAWN_BASE_MS * reduction;
+    if (rt.eventActive && rt.eventActive.type === 'cardume') interval *= 0.4;
+    if (rt.consumableActive?.type === 'extraBait') interval *= 0.5;
+    return Math.max(450, interval);
+}
+
+function consumableFiltersFish(fish) {
+    if (rt.consumableActive?.type === 'magnify' && fish.rarity === 'common') return false;
+    return true;
 }
 function getHookRadius()     { return HOOK_BASE_RADIUS * (1 + state.upgrades.hook * 0.08); }
 function getMultiCatchChance() {
-    return Math.min(0.30, 0.01 + state.upgrades.hook * 0.03 + state.upgrades.bait * 0.008);
+    return Math.min(0.50, 0.01 + state.upgrades.hook * 0.035 + state.upgrades.bait * 0.010);
 }
 function getMaxExtras()        { return 1 + Math.floor(state.upgrades.hook / 8); }
 function getBaitRarityBonus()  { return Math.min(0.35, state.upgrades.bait * 0.025); }
-function getValueMultiplier()  { return 1 + state.upgrades.value * 0.04; }
-function getPassiveRate()      { return state.upgrades.net * 0.15; }
+function getValueMultiplier()  { return (1 + state.upgrades.value * 0.04) * getPearlValueMult(); }
+function getPassiveRate()      { return state.upgrades.net * 0.15 * (1 + (state.pearlBonuses?.spawn || 0) * 0.05); }
 function isZoneUnlocked(id)    { return state.upgrades.motor >= ZONES[id].requiredMotor; }
+
+// === PRESTÍGIO (PÉROLAS) ===
+function getPearlValueMult()   { return 1 + (state.pearlBonuses?.value || 0) * 0.05; }   // +5% por pérola gasta em valor
+function calcPearlsAvailable() {
+    // 1 pérola a cada $500.000 ganhos vitalícios
+    const earned = state.totalEarned || 0;
+    return Math.floor(Math.sqrt(earned / 500000));
+}
+function calcPearlsToGain() {
+    const total = calcPearlsAvailable();
+    return Math.max(0, total - (state.pearls + sumPearlBonuses()));
+}
+function sumPearlBonuses() {
+    const b = state.pearlBonuses || {};
+    return (b.value || 0) + (b.spawn || 0) + (b.multi || 0);
+}
 
 function fmtMoney(n) {
     if (n >= 1e12) return '$' + (n / 1e12).toFixed(2) + 'T';
@@ -386,7 +431,9 @@ function fmtMoney(n) {
 }
 
 function rollFish(zoneId) {
-    const pool = FISH.filter(f => f.zones.includes(zoneId));
+    let pool = FISH.filter(f => f.zones.includes(zoneId));
+    pool = pool.filter(eventFiltersFish);
+    pool = pool.filter(consumableFiltersFish);
     if (!pool.length) return null;
     const bonus = getBaitRarityBonus();
     const weighted = pool.map(f => ({ fish: f, w: f.weight * (1 + bonus * RARITY_SCORE[f.rarity]) }));
@@ -400,15 +447,27 @@ function rollFish(zoneId) {
 }
 
 function sellFish(f) {
-    const v = Math.floor(f.baseValue * getValueMultiplier());
+    const v = Math.floor(f.baseValue * getValueMultiplier() * getEventValueMult());
     state.money += v;
+    state.totalEarned = (state.totalEarned || 0) + v;
     state.totalFish += 1;
+    // Atualiza progresso de missões
+    questProgress('catch_any', 1);
+    questProgress('catch_' + f.rarity, 1);
+    if (f.zones.includes(3)) questProgress('catch_abyss', 1);
     // Tracking de espécies e lendários
     if (!state._speciesCaught) state._speciesCaught = {};
     const isNew = !state._speciesCaught[f.name];   // verificar ANTES de setar
     state._speciesCaught[f.name] = true;
     if (f.rarity === 'legendary') state._legendaryCaught = true;
-    if (isNew) setTimeout(updateCompendium, 0);
+    // Tracking de maior captura
+    if (!state._biggestCatch || v > state._biggestCatch.value) {
+        state._biggestCatch = { name: f.name, emoji: f.emoji, value: v, when: Date.now() };
+    }
+    if (isNew) {
+        setTimeout(updateCompendium, 0);
+        showNewSpeciesToast(f);
+    }
     return v;
 }
 
@@ -416,8 +475,23 @@ function sellFish(f) {
 // CANVAS
 // =================================================================
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d');
+const ctx = canvas.getContext('2d', { alpha: false });   // perf: sem alpha (canvas sempre cheio)
 let cw = 0, ch = 0;
+
+// Cache de elementos DOM acessados em hot paths
+const DOM = {};
+function cacheDOM() {
+    DOM.castButton    = document.getElementById('castButton');
+    DOM.castProgress  = document.getElementById('castProgress');
+    DOM.cooldownRing  = document.getElementById('cooldownRing');
+    DOM.money         = document.getElementById('money');
+    DOM.totalFish     = document.getElementById('totalFish');
+    DOM.passiveIncome = document.getElementById('passiveIncome');
+    DOM.currentZone   = document.getElementById('currentZone');
+    DOM.currentDepth  = document.getElementById('currentDepth');
+    DOM.fishingLog    = document.getElementById('fishingLog');
+    DOM.catchShowcase = document.getElementById('catchShowcase');
+}
 
 function resizeCanvas() {
     const r = canvas.parentElement.getBoundingClientRect();
@@ -431,7 +505,11 @@ function resizeCanvas() {
 
 function waterY()       { return ch * 0.22; }
 function waterHeight()  { return ch - waterY() - 110; } // -110 reserva área dos controles
-function boatPos()      { return { x: cw * 0.5, y: waterY() - 12 }; }
+function boatPos() {
+    // Deriva lateral lenta — adiciona vida ao barco
+    const drift = Math.sin(rt.time * 0.00015) * cw * 0.04 + Math.sin(rt.time * 0.00037) * cw * 0.015;
+    return { x: cw * 0.5 + drift, y: waterY() - 12 };
+}
 function rodTipPos(t) {
     const b = boatPos();
     const sway = Math.sin(t * 0.001) * 3;
@@ -798,6 +876,7 @@ function spawnFish() {
 
     rt.activeFish.push({
         fish: fishType,
+        fishIdx: FISH.indexOf(fishType),    // cache do index pra evitar O(n) por frame
         x, y: lane,
         vx,
         flipped: !fromLeft,
@@ -806,6 +885,8 @@ function spawnFish() {
         bossHp: fishType.bossHp || 0,
         bossMaxHp: fishType.bossHp || 0,
     });
+    // Insere ordenado por size (peixes menores atrás) — evita sort por frame
+    rt.activeFish.sort((a, b) => a.fish.size - b.fish.size);
 }
 
 function updateFish(delta) {
@@ -837,8 +918,10 @@ function updateFish(delta) {
         // Peixes raros+ fogem do anzol
         if (rt.fishingActive && !rt.hookDescending && f.fish.rarity !== 'common') {
             const hp = hookPxPos();
-            const dist = Math.hypot(hp.x - f.x, hp.y - f.y);
-            if (dist < 200) {
+            const ddx = hp.x - f.x, ddy = hp.y - f.y;
+            const distSq = ddx * ddx + ddy * ddy;
+            if (distSq < 40000) {                            // 200² = 40000
+                const dist = Math.sqrt(distSq);
                 const intensity = (1 - dist / 200) * (f.fish.rarity === 'legendary' ? 2.5 : f.fish.rarity === 'epic' ? 1.8 : 1.2);
                 f.vx *= (1 + intensity * dt);
                 const maxSpeed = (280 + f.fish.speed * 180) * 2.8;
@@ -869,7 +952,7 @@ function drawFish(f) {
     if (f.flipped) ctx.scale(-1, 1);
 
     const s = f.fish.size;
-    const idx = FISH.indexOf(f.fish);
+    const idx = f.fishIdx ?? FISH.indexOf(f.fish);
     const col = idx >= 0 ? FISH_COLORS[idx] : null;
     const bodyLen = s * 0.50;
     const bodyH = s * 0.20;
@@ -962,9 +1045,9 @@ function drawFish(f) {
         ctx.fillRect(-bw/2 + 1, -bodyH * 1.3 + 1, (bw - 2) * ratio, bh - 2);
     }
 
-    // Glow por raridade ao redor do peixe
+    // Glow por raridade — só em rare+ pra economizar shadowBlur (custo alto)
     const glow = RARITY_GLOW[f.fish.rarity];
-    if (glow) {
+    if (glow && f.fish.rarity !== 'uncommon') {
         ctx.save();
         ctx.shadowColor = glow;
         ctx.shadowBlur = f.fish.rarity === 'legendary' ? 22 : (f.fish.rarity === 'epic' ? 14 : 8);
@@ -973,6 +1056,16 @@ function drawFish(f) {
         ctx.lineWidth = 1.2;
         ctx.beginPath();
         ctx.ellipse(0, 0, bodyLen * 0.5 + 2, bodyH + 2, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.restore();
+    } else if (glow) {
+        // Para uncommon: stroke colorido leve sem shadow (barato)
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        ctx.strokeStyle = glow;
+        ctx.lineWidth = 1.0;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, bodyLen * 0.5 + 1, bodyH + 1, 0, 0, Math.PI * 2);
         ctx.stroke();
         ctx.restore();
     }
@@ -1184,13 +1277,18 @@ function drawBoat(t) {
 // BOLHAS
 // =================================================================
 function spawnBubble() {
+    // Bolhas variam por zona (abissal: mais escassas, lentas, escuras)
+    const z = state.currentZone;
+    const speedMod = [1.0, 1.0, 0.85, 0.55][z];
+    const sizeMod  = [1.0, 1.05, 1.1, 1.25][z];
+    const opMod    = [1.0, 0.95, 0.8, 0.65][z];
     rt.bubbles.push({
         x: Math.random() * cw,
         y: ch,
-        size: 3 + Math.random() * 6,
-        speed: 28 + Math.random() * 50,
+        size: (3 + Math.random() * 6) * sizeMod,
+        speed: (28 + Math.random() * 50) * speedMod,
         wobble: Math.random() * Math.PI * 2,
-        opacity: 0.25 + Math.random() * 0.4,
+        opacity: (0.25 + Math.random() * 0.4) * opMod,
     });
 }
 
@@ -1299,9 +1397,19 @@ function drawParticles() {
 // =================================================================
 function initSeaweed() {
     rt.seaweed = [];
-    const count = 6 + Math.floor(Math.random() * 5);
+    // Por zona: vegetação diferente
+    // 0=verdes vibrantes / 1=corais coloridos / 2=algas escuras / 3=tubos bioluminescentes
+    const z = state.currentZone;
+    const count = z === 3 ? 4 : 6 + Math.floor(Math.random() * 5);
+    const hueRanges = [
+        { base: 110, spread: 50  },  // costa - verde
+        { base: 320, spread: 60  },  // arrecifes - magenta/roxo (corais)
+        { base: 180, spread: 30  },  // mar aberto - verde-azulado escuro
+        { base: 200, spread: 80  },  // abissal - ciano/azul bioluminescente
+    ];
+    const hr = hueRanges[z];
     for (let i = 0; i < count; i++) {
-        const h = 80 + Math.random() * 180;
+        const h = (z === 3 ? 60 : 80) + Math.random() * 180;
         rt.seaweed.push({
             x: Math.random() * cw,
             h,
@@ -1309,7 +1417,8 @@ function initSeaweed() {
             phase: Math.random() * Math.PI * 2,
             speed: 0.0008 + Math.random() * 0.0015,
             thick: 3 + Math.random() * 3,
-            hue: 110 + Math.random() * 50,
+            hue: hr.base + Math.random() * hr.spread,
+            biolum: z === 3,    // brilha na fossa
         });
     }
 }
@@ -1321,7 +1430,14 @@ function drawSeaweed(t) {
     for (const alga of rt.seaweed) {
         const segH = alga.h / alga.segs;
         ctx.save();
-        ctx.strokeStyle = `hsla(${alga.hue}, ${45 + Math.sin(alga.phase) * 15}%, ${18 + Math.sin(alga.phase * 0.7) * 8}%, 0.7)`;
+        if (alga.biolum) {
+            const glow = 0.4 + 0.3 * Math.sin(t * 0.002 + alga.phase);
+            ctx.shadowColor = `hsla(${alga.hue}, 80%, 65%, ${glow})`;
+            ctx.shadowBlur = 8;
+            ctx.strokeStyle = `hsla(${alga.hue}, 70%, ${30 + Math.sin(alga.phase) * 10}%, 0.8)`;
+        } else {
+            ctx.strokeStyle = `hsla(${alga.hue}, ${45 + Math.sin(alga.phase) * 15}%, ${18 + Math.sin(alga.phase * 0.7) * 8}%, 0.7)`;
+        }
         ctx.lineWidth = alga.thick;
         ctx.lineCap = 'round';
         ctx.beginPath();
@@ -1509,7 +1625,7 @@ function startFishing() {
     rt.hookX = 50;
     rt.hookY = 0;
     rt.hookDescending = true;
-    document.getElementById('castButton').classList.add('fishing');
+    DOM.castButton.classList.add('fishing');
     addLog('🎣 Anzol lançado! Use WASD para mover.');
     // Splash inicial na superfície
     emitSplash(cw * 0.5, waterY() + 4);
@@ -1520,8 +1636,25 @@ function endFishing() {
     rt.fishingActive = false;
     rt.cooldownEndTime = performance.now() + COOLDOWN_MS;
     rt.activeFish.length = 0;
-    document.getElementById('castButton').classList.remove('fishing');
-    document.getElementById('castProgress').style.width = '0%';
+    DOM.castButton.classList.remove('fishing');
+    DOM.castButton.classList.add('cooldown');
+    DOM.castProgress.style.width = '0%';
+    rt.combo = 0;
+    // Consumíveis duram apenas uma sessão
+    rt.consumableActive = null;
+    updateConsumables();
+}
+
+function tickCooldown(now) {
+    if (!DOM.castButton) return;
+    if (now < rt.cooldownEndTime) {
+        const elapsed = COOLDOWN_MS - (rt.cooldownEndTime - now);
+        const pct = Math.max(0, Math.min(100, (elapsed / COOLDOWN_MS) * 100));
+        DOM.castProgress.style.width = pct + '%';
+    } else if (DOM.castButton.classList.contains('cooldown')) {
+        DOM.castButton.classList.remove('cooldown');
+        DOM.castProgress.style.width = '0%';
+    }
 }
 
 function catchFishInteractive(fish) {
@@ -1555,7 +1688,13 @@ function catchFishInteractive(fish) {
         rt.combo = 1;
     }
     rt.lastCatchTime = now;
+    if (rt.combo > (state._maxCombo || 0)) state._maxCombo = rt.combo;
     const comboMult = 1 + (rt.combo - 1) * 0.2;
+    // Tracking missões de raridade
+    questProgress('catch_' + fish.fish.rarity, 1);
+    if (fish.fish.rarity === 'rare' || fish.fish.rarity === 'epic' || fish.fish.rarity === 'legendary') {
+        questProgress('catch_rare', 1);
+    }
 
     let total = 0;
     for (let i = 0; i < count; i++) total += sellFish(fish.fish);
@@ -1596,7 +1735,8 @@ function tickFishing(now, delta) {
     if (!rt.fishingActive) return;
 
     if (rt.hookDescending) {
-        rt.hookY += delta * 0.2;
+        // Descida em HOOK_DESCENT_MS com easing suave
+        rt.hookY += delta * (HOOK_INITIAL_DEPTH / HOOK_DESCENT_MS);
         if (rt.hookY >= HOOK_INITIAL_DEPTH) {
             rt.hookY = HOOK_INITIAL_DEPTH;
             rt.hookDescending = false;
@@ -1605,8 +1745,9 @@ function tickFishing(now, delta) {
         if (rt.keyState.up)   rt.hookY = Math.max(2,  rt.hookY - delta * HOOK_SPEED);
         if (rt.keyState.down) rt.hookY = Math.min(98, rt.hookY + delta * HOOK_SPEED);
     }
-    if (rt.keyState.left)  rt.hookX = Math.max(2,  rt.hookX - delta * HOOK_SPEED);
-    if (rt.keyState.right) rt.hookX = Math.min(98, rt.hookX + delta * HOOK_SPEED);
+    const hookSpeed = HOOK_SPEED * getEventHookMult();
+    if (rt.keyState.left)  rt.hookX = Math.max(2,  rt.hookX - delta * hookSpeed);
+    if (rt.keyState.right) rt.hookX = Math.min(98, rt.hookX + delta * hookSpeed);
 
     if (now >= rt.nextSpawnTime) {
         spawnFish();
@@ -1621,7 +1762,7 @@ function tickFishing(now, delta) {
 
     const remaining = rt.sessionEndTime - now;
     const progress = Math.max(0, Math.min(1, 1 - remaining / rt.sessionDuration));
-    document.getElementById('castProgress').style.width = (progress * 100) + '%';
+    DOM.castProgress.style.width = (progress * 100) + '%';
 
     if (now >= rt.sessionEndTime) endFishing();
 }
@@ -1632,7 +1773,8 @@ function tickPassive(delta) {
     rt.passiveAccumulator += (rate / 60000) * delta;
     while (rt.passiveAccumulator >= 1) {
         rt.passiveAccumulator -= 1;
-        const f = rollFish(state.currentZone);
+        // Rede pesca na MELHOR zona desbloqueada (não na atual)
+        const f = rollFish(bestUnlockedZone());
         if (f) {
             const v = sellFish(f);
             rt.netLogAccum.count++;
@@ -1716,9 +1858,16 @@ function createZoneCards() {
         const btn = document.createElement('button');
         btn.className = 'zone-card';
         btn.type = 'button';
+        // Preview de até 4 espécies características da zona
+        const previewFish = FISH.filter(f => f.zones.includes(zone.id))
+            .sort((a, b) => RARITY_SCORE[b.rarity] - RARITY_SCORE[a.rarity])
+            .slice(0, 4)
+            .map(f => f.emoji)
+            .join(' ');
         btn.innerHTML = `
             <span class="zone-card-name">${zone.name}</span>
             <span class="zone-card-depth">${zone.minDepth}-${zone.maxDepth}m</span>
+            <span class="zone-card-preview">${previewFish}</span>
             <span class="zone-lock"></span>
         `;
         btn.addEventListener('click', (e) => {
@@ -1726,6 +1875,9 @@ function createZoneCards() {
             e.stopPropagation();
             if (!isZoneUnlocked(zone.id) || rt.fishingActive) return;
             state.currentZone = zone.id;
+            rt.activeFish.length = 0;     // limpa peixes da zona anterior
+            rt.trails.length = 0;
+            rt.chests.length = 0;
             initSeaweed();
             rt.zoneTransition = 1.0;
             SFX.zone();
@@ -1767,13 +1919,21 @@ function buyUpgrade(id) {
     updateStats();
 }
 
+const RARITY_LABEL = {
+    common: 'Comum', uncommon: 'Incomum', rare: 'RARO',
+    epic: 'ÉPICO', legendary: 'LENDÁRIO',
+};
+
 function showBigCatch(fishType, totalValue, count) {
-    const sc = document.getElementById('catchShowcase');
+    const sc = DOM.catchShowcase || document.getElementById('catchShowcase');
+    if (!sc) return;
     const card = document.createElement('div');
     card.className = `big-catch-card rarity-${fishType.rarity}`;
+    const showRarity = fishType.rarity !== 'common';
     card.innerHTML = `
         <div class="fish-big">${fishType.emoji}</div>
         <div class="info">
+            ${showRarity ? `<div class="fish-rarity-tag rarity-tag-${fishType.rarity}">${RARITY_LABEL[fishType.rarity]}</div>` : ''}
             <div class="fish-name">${fishType.name}</div>
             <div class="fish-value">+${fmtMoney(totalValue)}</div>
         </div>
@@ -1785,8 +1945,24 @@ function showBigCatch(fishType, totalValue, count) {
     while (sc.children.length > 4) sc.lastChild.remove();
 }
 
+function showNewSpeciesToast(fish) {
+    const t = document.createElement('div');
+    t.className = 'new-species-toast';
+    t.innerHTML = `
+        <span class="new-species-emoji">${fish.emoji}</span>
+        <div>
+            <strong>🆕 Nova espécie!</strong>
+            <span>${fish.name}</span>
+        </div>
+    `;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 3500);
+    SFX.tone ? null : null; // já toca SFX.catch normal
+}
+
 function addLog(text) {
-    const log = document.getElementById('fishingLog');
+    const log = DOM.fishingLog || document.getElementById('fishingLog');
+    if (!log) return;
     const li = document.createElement('li');
     li.textContent = text;
     log.prepend(li);
@@ -1794,15 +1970,34 @@ function addLog(text) {
 }
 
 function updateStats() {
-    document.getElementById('money').textContent = fmtMoney(state.money);
-    document.getElementById('totalFish').textContent = state.totalFish.toLocaleString('pt-BR');
+    if (!DOM.money) return;
+    const newMoney = fmtMoney(state.money);
+    if (DOM.money.textContent !== newMoney) {
+        DOM.money.textContent = newMoney;
+        DOM.money.parentElement?.classList.remove('money-tick');
+        // reflow força reinício da animação
+        void DOM.money.offsetWidth;
+        DOM.money.parentElement?.classList.add('money-tick');
+    }
+    DOM.totalFish.textContent = state.totalFish.toLocaleString('pt-BR');
+
+    // Pesca passiva no melhor zona desbloqueada para cálculo de lucro
     const rate = getPassiveRate();
-    const pool = FISH.filter(f => f.zones.includes(state.currentZone));
+    const bestZone = bestUnlockedZone();
+    const pool = FISH.filter(f => f.zones.includes(bestZone));
     const tw = pool.reduce((s, f) => s + f.weight, 0);
     const avg = pool.reduce((s, f) => s + f.baseValue * f.weight, 0) / (tw || 1);
-    document.getElementById('passiveIncome').textContent = fmtMoney(rate * avg * getValueMultiplier());
-    document.getElementById('currentZone').textContent = ZONES[state.currentZone].name;
-    document.getElementById('currentDepth').textContent = ZONES[state.currentZone].maxDepth;
+    DOM.passiveIncome.textContent = fmtMoney(rate * avg * getValueMultiplier() * getPearlValueMult());
+    DOM.currentZone.textContent = ZONES[state.currentZone].name;
+    DOM.currentDepth.textContent = ZONES[state.currentZone].maxDepth;
+}
+
+function bestUnlockedZone() {
+    let best = 0;
+    for (let i = ZONES.length - 1; i >= 0; i--) {
+        if (isZoneUnlocked(i)) { best = i; break; }
+    }
+    return best;
 }
 
 // =================================================================
@@ -1818,6 +2013,9 @@ const ACHIEVEMENTS = [
     { id: 'rich_1m',      name: 'Magnata do Mar',      desc: 'Acumule $1.000.000',               check: () => state.money >= 1000000,   reward: 75000 },
     { id: 'all_zone0',    name: 'Costa Completa',      desc: 'Capture todas as espécies da Costa',check: () => zoneComplete(0),          reward: 2000 },
     { id: 'all_zone3',    name: 'Senhor do Abismo',    desc: 'Capture todas as espécies do Abissal',check: () => zoneComplete(3),         reward: 100000 },
+    { id: 'first_pearl',  name: 'Renascido',           desc: 'Faça seu primeiro Prestígio',       check: () => (state.pearls || 0) >= 1, reward: 5000 },
+    { id: 'pearls_5',     name: 'Colecionador',        desc: 'Acumule 5 Pérolas',                 check: () => (state.pearls || 0) >= 5, reward: 25000 },
+    { id: 'big_combo',    name: 'Maestro do Combo',    desc: 'Faça um combo x10',                 check: () => (state._maxCombo || 0) >= 10, reward: 8000 },
 ];
 
 function zoneComplete(z) {
@@ -1840,17 +2038,36 @@ function checkAchievements() {
     return awarded;
 }
 
+// Toasts empilhados (não se sobrepõem)
+const _achStack = [];
 function showAchievementToast(a) {
     const t = document.createElement('div');
     t.className = 'achievement-toast';
     t.innerHTML = `<span class="ach-icon">🏆</span><div><strong>${a.name}</strong><span>${a.desc}</span></div>`;
     document.body.appendChild(t);
-    setTimeout(() => t.remove(), 4000);
+    _achStack.push(t);
+    repositionAchStack();
+    setTimeout(() => {
+        t.classList.add('exiting');
+        setTimeout(() => {
+            t.remove();
+            const idx = _achStack.indexOf(t);
+            if (idx >= 0) _achStack.splice(idx, 1);
+            repositionAchStack();
+        }, 400);
+    }, 4000);
+}
+function repositionAchStack() {
+    _achStack.forEach((el, i) => {
+        el.style.top = (20 + i * 78) + 'px';
+    });
 }
 
 // =================================================================
 // COMPÊNDIO DE ESPÉCIES
 // =================================================================
+let _compFilter = 'all';   // 'all' | 'caught' | 'missing'
+
 function buildCompendium() {
     const grid = document.getElementById('compendiumGrid');
     if (!grid) return;
@@ -1858,9 +2075,10 @@ function buildCompendium() {
     FISH.forEach((f, i) => {
         const caught = (state._speciesCaught || {})[f.name];
         const cell = document.createElement('div');
-        cell.className = 'comp-cell';
+        cell.className = 'comp-cell' + (caught ? ' comp-caught' : '');
         cell.dataset.index = i;
-        cell.title = caught ? `${f.name} · ${f.rarity} · ${fmtMoney(f.baseValue)}` : '???';
+        cell.dataset.caught = caught ? '1' : '0';
+        cell.title = caught ? `${f.name} · ${RARITY_LABEL[f.rarity]} · ${fmtMoney(f.baseValue)}` : '???';
         cell.innerHTML = `
             <span class="comp-emoji">${caught ? f.emoji : '❓'}</span>
             <span class="comp-rarity comp-rarity-${f.rarity}"></span>
@@ -1869,10 +2087,30 @@ function buildCompendium() {
         `;
         grid.appendChild(cell);
     });
+    applyCompFilter();
     const caught = Object.keys(state._speciesCaught || {}).length;
     const total = FISH.length;
     const counter = document.getElementById('compendiumCount');
     if (counter) counter.textContent = `${caught} / ${total} espécies`;
+}
+
+function applyCompFilter() {
+    const grid = document.getElementById('compendiumGrid');
+    if (!grid) return;
+    grid.querySelectorAll('.comp-cell').forEach(cell => {
+        const c = cell.dataset.caught === '1';
+        if (_compFilter === 'all')          cell.style.display = '';
+        else if (_compFilter === 'caught')  cell.style.display = c ? '' : 'none';
+        else if (_compFilter === 'missing') cell.style.display = c ? 'none' : '';
+    });
+}
+
+function setCompFilter(f) {
+    _compFilter = f;
+    document.querySelectorAll('.comp-filter-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.filter === f);
+    });
+    applyCompFilter();
 }
 
 function updateCompendium() {
@@ -1904,6 +2142,285 @@ function updateCompendium() {
 }
 
 // =================================================================
+// LOJA DE CONSUMÍVEIS
+// =================================================================
+const CONSUMABLES = [
+    { id: 'extraBait',   name: 'Isca Extra',   icon: '🪱', cost: 500,   desc: '2× spawn' },
+    { id: 'magnify',     name: 'Lupa',         icon: '🔍', cost: 1500,  desc: 'Só raros' },
+    { id: 'chronometer', name: 'Cronômetro',   icon: '⏱️', cost: 3000,  desc: '+50% tempo' },
+];
+
+function buildConsumables() {
+    const list = document.getElementById('consumablesList');
+    if (!list) return;
+    list.innerHTML = '';
+    CONSUMABLES.forEach(c => {
+        const card = document.createElement('div');
+        card.className = 'consumable-card';
+        card.innerHTML = `
+            <span class="cons-icon">${c.icon}</span>
+            <span class="cons-name">${c.name}</span>
+            <span class="cons-count">x<span data-cons-count="${c.id}">0</span></span>
+            <button class="cons-buy-btn" data-cons-buy="${c.id}">${fmtMoney(c.cost)}</button>
+            <button class="cons-use-btn" data-cons-use="${c.id}">USAR</button>
+        `;
+        list.appendChild(card);
+    });
+    list.addEventListener('click', (e) => {
+        const buyId = e.target.dataset?.consBuy;
+        const useId = e.target.dataset?.consUse;
+        if (buyId) buyConsumable(buyId);
+        if (useId) useConsumable(useId);
+    });
+    updateConsumables();
+}
+
+function updateConsumables() {
+    CONSUMABLES.forEach(c => {
+        const cnt = document.querySelector(`[data-cons-count="${c.id}"]`);
+        if (cnt) cnt.textContent = state.consumables?.[c.id] ?? 0;
+        const buy = document.querySelector(`[data-cons-buy="${c.id}"]`);
+        if (buy) buy.disabled = state.money < c.cost;
+        const use = document.querySelector(`[data-cons-use="${c.id}"]`);
+        if (use) use.disabled = (state.consumables?.[c.id] ?? 0) <= 0 || rt.fishingActive;
+    });
+}
+
+function buyConsumable(id) {
+    const c = CONSUMABLES.find(x => x.id === id);
+    if (!c || state.money < c.cost) return;
+    state.money -= c.cost;
+    if (!state.consumables) state.consumables = {};
+    state.consumables[id] = (state.consumables[id] || 0) + 1;
+    SFX.upgrade();
+    addLog(`🛒 Comprou ${c.icon} ${c.name}`);
+    updateConsumables();
+    updateStats();
+}
+
+function useConsumable(id) {
+    if (rt.fishingActive) return;
+    if ((state.consumables?.[id] || 0) <= 0) return;
+    state.consumables[id]--;
+    if (id === 'extraBait')   rt.consumableActive = { type: 'extraBait',   uses: 1 };
+    if (id === 'magnify')     rt.consumableActive = { type: 'magnify',     uses: 1 };
+    if (id === 'chronometer') rt.consumableActive = { type: 'chronometer', uses: 1 };
+    SFX.upgrade();
+    addLog(`✨ Item ativado para a próxima sessão!`);
+    updateConsumables();
+}
+
+// =================================================================
+// TROFEUS / ESTATÍSTICAS
+// =================================================================
+function openTrophiesModal() {
+    const grid = document.getElementById('trophiesGrid');
+    if (!grid) return;
+    const trophies = [
+        { icon: '💰', label: 'Total ganho',     value: fmtMoney(state.totalEarned || 0) },
+        { icon: '🐟', label: 'Peixes capturados', value: (state.totalFish || 0).toLocaleString('pt-BR') },
+        { icon: '🦪', label: 'Pérolas',          value: state.pearls || 0 },
+        { icon: '🔥', label: 'Maior combo',      value: 'x' + (state._maxCombo || 0) },
+        { icon: '🎯', label: 'Maior captura',    value: state._biggestCatch ? `${state._biggestCatch.emoji} ${fmtMoney(state._biggestCatch.value)}` : '—' },
+        { icon: '📚', label: 'Espécies',         value: `${Object.keys(state._speciesCaught || {}).length} / ${FISH.length}` },
+        { icon: '🏆', label: 'Conquistas',       value: `${Object.keys(state.achievements || {}).length} / ${ACHIEVEMENTS.length}` },
+        { icon: '🌊', label: 'Zonas desbloqueadas', value: `${ZONES.filter((_, i) => isZoneUnlocked(i)).length} / ${ZONES.length}` },
+    ];
+    grid.innerHTML = trophies.map(t => `
+        <div class="trophy-card">
+            <div class="trophy-icon">${t.icon}</div>
+            <span class="trophy-label">${t.label}</span>
+            <div class="trophy-value">${t.value}</div>
+        </div>
+    `).join('');
+    document.getElementById('trophiesModal').classList.add('show');
+}
+
+// =================================================================
+// EVENTOS ALEATÓRIOS — cardume, tempestade, lua cheia
+// =================================================================
+const EVENTS = [
+    { id: 'cardume',    name: 'CARDUME!',     desc: 'Spawn de peixes 3× por 15s',     icon: '🐟', dur: 15000, weight: 5 },
+    { id: 'tempestade', name: 'TEMPESTADE!',  desc: 'Anzol 60% mais rápido por 12s',  icon: '⚡', dur: 12000, weight: 4 },
+    { id: 'lua_cheia',  name: 'LUA CHEIA!',   desc: 'Só raros+ aparecem por 18s',     icon: '🌕', dur: 18000, weight: 2 },
+    { id: 'sorte',      name: 'SORTE GRANDE!',desc: 'Valor +100% por 20s',            icon: '🍀', dur: 20000, weight: 3 },
+];
+
+function tickEvents(now, delta) {
+    if (!rt.fishingActive) return;
+    if (rt.eventActive) {
+        rt.eventActive.remaining -= delta;
+        if (rt.eventActive.remaining <= 0) {
+            const ended = rt.eventActive.name;
+            rt.eventActive = null;
+            addLog(`📅 Evento "${ended}" terminou.`);
+        }
+        return;
+    }
+    if (now < rt.nextEventCheck) return;
+    rt.nextEventCheck = now + 8000 + Math.random() * 12000;
+    if (Math.random() < 0.18) triggerRandomEvent();
+}
+
+function triggerRandomEvent() {
+    const total = EVENTS.reduce((s, e) => s + e.weight, 0);
+    let r = Math.random() * total;
+    let chosen = EVENTS[0];
+    for (const e of EVENTS) { r -= e.weight; if (r <= 0) { chosen = e; break; } }
+    rt.eventActive = { ...chosen, type: chosen.id, remaining: chosen.dur };
+    showEventToast(chosen);
+    SFX.zone();
+    addLog(`✨ ${chosen.icon} ${chosen.name} ${chosen.desc}`);
+}
+
+function showEventToast(ev) {
+    const t = document.createElement('div');
+    t.className = 'event-toast';
+    t.innerHTML = `<span class="ev-icon">${ev.icon}</span><div><strong>${ev.name}</strong><span>${ev.desc}</span></div>`;
+    document.body.appendChild(t);
+    setTimeout(() => t.classList.add('exiting'), ev.dur - 600);
+    setTimeout(() => t.remove(), ev.dur);
+}
+
+function getEventValueMult() { return rt.eventActive?.type === 'sorte' ? 2 : 1; }
+function getEventHookMult()  { return rt.eventActive?.type === 'tempestade' ? 1.6 : 1; }
+function eventFiltersFish(fish) {
+    if (rt.eventActive?.type === 'lua_cheia' && fish.rarity === 'common') return false;
+    return true;
+}
+
+// =================================================================
+// MISSÕES DIÁRIAS
+// =================================================================
+const QUEST_POOL = [
+    { id: 'catch_any',    desc: peixes => `Capture ${peixes} peixes`,         goals: [10, 25, 50],    track: 'catch_any',       reward: lvl => 200 * (lvl + 1) * (lvl + 1) },
+    { id: 'catch_rare',   desc: n => `Capture ${n} peixes raros+`,            goals: [3, 8, 15],      track: 'catch_rare',      reward: lvl => 1500 * (lvl + 1) },
+    { id: 'catch_epic',   desc: n => `Capture ${n} peixes épicos`,            goals: [1, 3, 6],       track: 'catch_epic',      reward: lvl => 4000 * (lvl + 1) },
+    { id: 'catch_abyss',  desc: n => `Capture ${n} peixes da Fossa Abissal`,  goals: [3, 8, 15],      track: 'catch_abyss',     reward: lvl => 8000 * (lvl + 1) },
+    { id: 'catch_legend', desc: n => `Capture ${n} peixes lendários`,         goals: [1, 2, 3],       track: 'catch_legendary', reward: lvl => 50000 * (lvl + 1) },
+];
+
+function todayKey() {
+    const d = new Date();
+    return `${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`;
+}
+
+function ensureQuestsForToday() {
+    if (!state.quests) state.quests = { date: '', list: [] };
+    if (state.quests.date === todayKey() && state.quests.list.length) return;
+    // Sorteia 3 missões
+    const pool = [...QUEST_POOL];
+    const list = [];
+    for (let i = 0; i < 3 && pool.length; i++) {
+        const idx = Math.floor(Math.random() * pool.length);
+        const q = pool.splice(idx, 1)[0];
+        const lvl = Math.floor(Math.random() * 3); // 0, 1 ou 2
+        list.push({
+            id: q.id, track: q.track,
+            goal: q.goals[lvl], progress: 0,
+            reward: q.reward(lvl),
+            desc: q.desc(q.goals[lvl]),
+            done: false,
+        });
+    }
+    state.quests = { date: todayKey(), list };
+}
+
+function questProgress(track, n) {
+    if (!state.quests?.list) return;
+    let any = false;
+    for (const q of state.quests.list) {
+        if (q.done) continue;
+        if (q.track === track) {
+            q.progress += n;
+            any = true;
+            if (q.progress >= q.goal) {
+                q.done = true;
+                state.money += q.reward;
+                state.totalEarned = (state.totalEarned || 0) + q.reward;
+                addLog(`📋 Missão concluída! +${fmtMoney(q.reward)}`);
+                showAchievementToast({ name: 'Missão Concluída', desc: q.desc });
+                SFX.upgrade();
+            }
+        }
+    }
+    if (any) renderQuests();
+}
+
+function renderQuests() {
+    const list = document.getElementById('questsList');
+    if (!list) return;
+    ensureQuestsForToday();
+    list.innerHTML = '';
+    state.quests.list.forEach(q => {
+        const pct = Math.min(100, (q.progress / q.goal) * 100);
+        const item = document.createElement('div');
+        item.className = 'quest-item' + (q.done ? ' quest-done' : '');
+        item.innerHTML = `
+            <div class="quest-row">
+                <span class="quest-desc">${q.desc}</span>
+                <span class="quest-reward">${q.done ? '✓' : '+' + fmtMoney(q.reward)}</span>
+            </div>
+            <div class="quest-bar"><div class="quest-bar-fill" style="width: ${pct}%"></div></div>
+            <div class="quest-progress">${Math.min(q.progress, q.goal)} / ${q.goal}</div>
+        `;
+        list.appendChild(item);
+    });
+}
+
+// =================================================================
+// PRESTÍGIO (PÉROLAS)
+// =================================================================
+function openPrestigeModal() {
+    const available = calcPearlsToGain();
+    const total = calcPearlsAvailable();
+    const modal = document.getElementById('prestigeModal');
+    if (!modal) return;
+    document.getElementById('prestigePearls').textContent = state.pearls;
+    document.getElementById('prestigeAvailable').textContent = available;
+    document.getElementById('prestigeTotal').textContent = total;
+    document.getElementById('prestigeBtn').disabled = available <= 0;
+    document.getElementById('prestigeBonusValue').textContent = state.pearlBonuses.value || 0;
+    document.getElementById('prestigeBonusSpawn').textContent = state.pearlBonuses.spawn || 0;
+    document.getElementById('prestigeBonusMulti').textContent = state.pearlBonuses.multi || 0;
+    modal.classList.add('show');
+}
+function closePrestigeModal() {
+    document.getElementById('prestigeModal')?.classList.remove('show');
+}
+function doPrestige() {
+    const gain = calcPearlsToGain();
+    if (gain <= 0) return;
+    if (!confirm(`Vai resetar dinheiro, peixes e melhorias para ganhar ${gain} pérola(s). Bônus permanentes e o compêndio são mantidos. Continuar?`)) return;
+    state.pearls += gain;
+    state.money = 0;
+    state.totalFish = 0;
+    state.upgrades = { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0 };
+    state.currentZone = 0;
+    state._biggestCatch = null;
+    state._maxCombo = 0;
+    state.consumables = { extraBait: 0, magnify: 0, chronometer: 0 };
+    SFX.catch('legendary');
+    rt.cameraShake = 20;
+    addLog(`🦪 Prestígio! Ganhou ${gain} pérola(s).`);
+    closePrestigeModal();
+    updateUpgradeCards();
+    updateZoneCards();
+    updateStats();
+    buildCompendium();
+    saveGame();
+}
+function buyPearlBonus(type) {
+    if (state.pearls <= 0) return;
+    state.pearls -= 1;
+    state.pearlBonuses[type] = (state.pearlBonuses[type] || 0) + 1;
+    SFX.upgrade();
+    openPrestigeModal();
+    updateStats();
+    saveGame();
+}
+
+// =================================================================
 // SAVE / LOAD
 // =================================================================
 function saveGame() {
@@ -1917,18 +2434,29 @@ function saveGame() {
 function loadGame() {
     try {
         let raw = localStorage.getItem(SAVE_KEY);
+        if (!raw) raw = localStorage.getItem('angeloPescadorSave_v3');
         if (!raw) raw = localStorage.getItem('angeloPescadorSave_v2');
         if (!raw) raw = localStorage.getItem('angeloPescadorSave_v1');
         if (!raw) return false;
         const s = JSON.parse(raw);
-        state = { ...state, ...s, upgrades: { ...state.upgrades, ...(s.upgrades || {}) } };
+        state = {
+            ...state,
+            ...s,
+            upgrades:     { ...state.upgrades,     ...(s.upgrades     || {}) },
+            pearlBonuses: { ...state.pearlBonuses, ...(s.pearlBonuses || {}) },
+            consumables:  { ...state.consumables,  ...(s.consumables  || {}) },
+            quests:       s.quests || state.quests,
+            // Migração: se totalEarned não existe, estima por money + upgrades comprados
+            totalEarned:  s.totalEarned ?? s.money ?? 0,
+        };
         return true;
     } catch { return false; }
 }
 
 function resetGame() {
-    if (!confirm('⚠️ Tem certeza? Todo progresso será perdido.')) return;
-    ['v1','v2','v3'].forEach(v => localStorage.removeItem('angeloPescadorSave_' + v));
+    if (!confirm('⚠️ Tem certeza? Todo progresso será perdido (incluindo pérolas e compêndio).')) return;
+    ['v1','v2','v3','v4'].forEach(v => localStorage.removeItem('angeloPescadorSave_' + v));
+    localStorage.removeItem('angeloPescadorTutorialDone');
     state = {
         money: 0, totalFish: 0, currentZone: 0,
         upgrades: { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0 },
@@ -1936,11 +2464,19 @@ function resetGame() {
         achievements: {},
         _speciesCaught: {},
         _legendaryCaught: false,
+        pearls: 0, totalEarned: 0,
+        pearlBonuses: { value: 0, spawn: 0, multi: 0 },
+        _biggestCatch: null, _maxCombo: 0, _playTime: 0,
+        quests: { date: '', list: [] },
+        consumables: { extraBait: 0, magnify: 0, chronometer: 0 },
     };
     updateUpgradeCards();
     updateZoneCards();
     updateStats();
     buildCompendium();
+    updateConsumables();
+    ensureQuestsForToday();
+    renderQuests();
     addLog('🔄 Jogo reiniciado');
 }
 
@@ -1958,6 +2494,16 @@ function showSaveToast() {
 let lastFrame = performance.now();
 
 function gameLoop(now) {
+    try {
+        runFrame(now);
+    } catch (err) {
+        console.error('[Angelo Pescador] erro no gameLoop:', err);
+        // Não interromper o loop — apenas registrar e seguir.
+        requestAnimationFrame(gameLoop);
+    }
+}
+
+function runFrame(now) {
     const delta = Math.min(50, now - lastFrame);
     lastFrame = now;
 
@@ -1986,7 +2532,9 @@ function gameLoop(now) {
     rt.time += delta;
 
     tickFishing(now, delta);
+    tickCooldown(now);
     tickPassive(delta);
+    tickEvents(now, delta);
     updateFish(delta);
     updateBubbles(delta);
     updateParticles(delta);
@@ -1996,7 +2544,9 @@ function gameLoop(now) {
 
     if (now > rt.nextBubbleTime) {
         spawnBubble();
-        rt.nextBubbleTime = now + 350 + Math.random() * 400;
+        // Intervalo maior em zonas profundas
+        const intervals = [350, 380, 500, 750];
+        rt.nextBubbleTime = now + intervals[state.currentZone] + Math.random() * 400;
     }
 
     if (now > rt.nextAmbientTime) {
@@ -2022,14 +2572,13 @@ function gameLoop(now) {
     drawCaustics(rt.time);
     drawTerrain(rt.time);
 
-    // Peixes ordenados por tamanho (menores atrás, maiores na frente)
-    rt.activeFish.sort((a, b) => a.fish.size - b.fish.size);
+    // Peixes (já estão ordenados por size desde o spawn)
     for (const f of rt.activeFish) drawFish(f);
 
+    drawSeaweed(rt.time);     // antes do fog para que algas em zonas profundas desbotem
     drawTrails();
     drawDepthFog();
     drawChests(rt.time);
-    drawSeaweed(rt.time);
     drawAmbient();
     drawBubbles();
     drawBoat(rt.time);
@@ -2066,6 +2615,28 @@ function gameLoop(now) {
         ctx.restore();
     }
 
+    // Banner de evento ativo (parte inferior da cena)
+    if (rt.eventActive) {
+        const ev = rt.eventActive;
+        const pct = ev.remaining / ev.dur;
+        ctx.save();
+        const bw = 220, bh = 28;
+        const bx = cw / 2 - bw / 2, by = ch - 130;
+        ctx.fillStyle = 'rgba(2, 8, 20, 0.85)';
+        ctx.strokeStyle = 'rgba(255, 215, 0, 0.7)';
+        ctx.lineWidth = 1.5;
+        ctx.beginPath();
+        ctx.roundRect ? ctx.roundRect(bx, by, bw, bh, 8) : ctx.rect(bx, by, bw, bh);
+        ctx.fill(); ctx.stroke();
+        ctx.fillStyle = 'rgba(255, 215, 0, 0.25)';
+        ctx.fillRect(bx + 2, by + bh - 5, (bw - 4) * pct, 3);
+        ctx.fillStyle = '#ffd700';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillText(`${ev.icon} ${ev.name}`, cw / 2, by + 12);
+        ctx.restore();
+    }
+
     // Joystick touch
     drawJoystick();
 
@@ -2087,7 +2658,10 @@ function gameLoop(now) {
 function slowUpdate() {
     updateStats();
     updateUpgradeCards();
+    updateConsumables();
     checkAchievements();
+    const tp = document.getElementById('topPearls');
+    if (tp) tp.textContent = state.pearls || 0;
 }
 
 function autoSave() { saveGame(); }
@@ -2097,6 +2671,13 @@ function autoSave() { saveGame(); }
 // =================================================================
 function setupInput() {
     document.addEventListener('keydown', (e) => {
+        // Ctrl/Cmd+S: salvar SEM acionar movimento pra baixo
+        if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') {
+            e.preventDefault();
+            if (saveGame()) showSaveToast();
+            return;
+        }
+        if (e.ctrlKey || e.metaKey) return; // ignora outros atalhos com modificador
         if (e.code === 'KeyA' || e.code === 'ArrowLeft')  rt.keyState.left = true;
         if (e.code === 'KeyD' || e.code === 'ArrowRight') rt.keyState.right = true;
         if (e.code === 'KeyW' || e.code === 'ArrowUp')    { rt.keyState.up = true; e.preventDefault(); }
@@ -2105,10 +2686,6 @@ function setupInput() {
         if (e.code === 'KeyP') {
             rt.paused = !rt.paused;
             SFX.pause(rt.paused);
-        }
-        if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') {
-            e.preventDefault();
-            if (saveGame()) showSaveToast();
         }
     });
     document.addEventListener('keyup', (e) => {
@@ -2123,7 +2700,12 @@ function setupInput() {
 // INIT
 // =================================================================
 function init() {
+    const isFirstTime = !localStorage.getItem(SAVE_KEY) &&
+                        !localStorage.getItem('angeloPescadorSave_v3') &&
+                        !localStorage.getItem('angeloPescadorSave_v2') &&
+                        !localStorage.getItem('angeloPescadorSave_v1');
     loadGame();
+    cacheDOM();
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
 
@@ -2132,10 +2714,34 @@ function init() {
     updateUpgradeCards();
     updateZoneCards();
     updateStats();
+    buildConsumables();
 
-    document.getElementById('castButton').addEventListener('click', startFishing);
+    DOM.castButton.addEventListener('click', startFishing);
     document.getElementById('saveBtn').addEventListener('click', () => { if (saveGame()) showSaveToast(); });
     document.getElementById('resetBtn').addEventListener('click', resetGame);
+    document.getElementById('openPrestigeBtn')?.addEventListener('click', openPrestigeModal);
+    document.getElementById('closePrestigeBtn')?.addEventListener('click', closePrestigeModal);
+    document.getElementById('prestigeBtn')?.addEventListener('click', doPrestige);
+    document.querySelectorAll('.pbc-buy[data-bonus]').forEach(b => {
+        b.addEventListener('click', () => buyPearlBonus(b.dataset.bonus));
+    });
+    document.getElementById('openTrophiesBtn')?.addEventListener('click', openTrophiesModal);
+    document.getElementById('closeTrophiesBtn')?.addEventListener('click', () => {
+        document.getElementById('trophiesModal').classList.remove('show');
+    });
+    // Filtros do compêndio
+    document.querySelectorAll('.comp-filter-btn').forEach(b => {
+        b.addEventListener('click', () => setCompFilter(b.dataset.filter));
+    });
+    // Tutorial
+    document.getElementById('tutorialOkBtn')?.addEventListener('click', () => {
+        document.getElementById('tutorialOverlay').classList.remove('show');
+        try { localStorage.setItem('angeloPescadorTutorialDone', '1'); } catch (e) {}
+    });
+    // Fechar modal por backdrop
+    document.querySelectorAll('.modal-backdrop').forEach(m => {
+        m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('show'); });
+    });
 
     setupInput();
     setupTouch();
@@ -2143,15 +2749,73 @@ function init() {
     initSeaweed();
 
     buildCompendium();
+    ensureQuestsForToday();
+    renderQuests();
+
+    // Topo: pérolas
+    const tp = document.getElementById('topPearls');
+    if (tp) tp.textContent = state.pearls || 0;
 
     setInterval(slowUpdate, 250);
     setInterval(autoSave, 15000);
+    setInterval(() => { ensureQuestsForToday(); renderQuests(); }, 60000); // checa virada do dia
     window.addEventListener('beforeunload', saveGame);
 
     addLog('🎣 Bem-vindo! Pressione ESPAÇO ou clique em LANÇAR ANZOL.');
-    addLog('🎮 Use WASD/setas · P = pausar · Ctrl+S = salvar');
+    addLog('🎮 WASD/setas · P pausar · Ctrl+S salvar');
+
+    // Tutorial na primeira vez
+    if (isFirstTime && !localStorage.getItem('angeloPescadorTutorialDone')) {
+        document.getElementById('tutorialOverlay')?.classList.add('show');
+    }
+
+    // Som ambiente
+    setupAmbientSound();
 
     requestAnimationFrame(gameLoop);
+}
+
+// =================================================================
+// SOM AMBIENTE — ruído de mar gerado por Web Audio
+// =================================================================
+let _ambientStarted = false;
+function setupAmbientSound() {
+    const start = () => {
+        if (_ambientStarted) return;
+        try {
+            const ac = new (window.AudioContext || window.webkitAudioContext)();
+            const buf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < data.length; i++) {
+                // ruído rosa filtrado — efeito de ondas
+                data[i] = (Math.random() * 2 - 1) * 0.3;
+            }
+            const src = ac.createBufferSource();
+            src.buffer = buf;
+            src.loop = true;
+            const filter = ac.createBiquadFilter();
+            filter.type = 'lowpass';
+            filter.frequency.setValueAtTime(420, ac.currentTime);
+            const gain = ac.createGain();
+            gain.gain.setValueAtTime(0.08, ac.currentTime);
+            // LFO leve no volume — efeito de ondas
+            const lfo = ac.createOscillator();
+            lfo.frequency.setValueAtTime(0.2, ac.currentTime);
+            const lfoGain = ac.createGain();
+            lfoGain.gain.setValueAtTime(0.04, ac.currentTime);
+            lfo.connect(lfoGain).connect(gain.gain);
+            src.connect(filter).connect(gain).connect(ac.destination);
+            src.start(); lfo.start();
+            _ambientStarted = true;
+        } catch (e) {}
+        document.removeEventListener('click', start);
+        document.removeEventListener('keydown', start);
+        document.removeEventListener('touchstart', start);
+    };
+    // Web Audio só pode iniciar após interação do usuário
+    document.addEventListener('click', start, { once: false });
+    document.addEventListener('keydown', start, { once: false });
+    document.addEventListener('touchstart', start, { once: false });
 }
 
 document.addEventListener('DOMContentLoaded', init);

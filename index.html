@@ -3,21 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="Jogo idle de pesca em HTML5: controle o anzol em tempo real, descubra 24 espécies, desbloqueie zonas profundas e evolua suas melhorias.">
+    <meta name="description" content="Jogo idle de pesca em HTML5: controle o anzol em tempo real, descubra 25 espécies, desbloqueie zonas profundas e evolua suas melhorias.">
     <meta name="theme-color" content="#0a3d62">
     <meta name="author" content="Angelo Pescador">
 
     <!-- Open Graph -->
     <meta property="og:type" content="website">
     <meta property="og:title" content="Angelo Pescador — Idle Fishing">
-    <meta property="og:description" content="Jogue pescaria idle no navegador: 24 peixes, 4 zonas oceânicas, física de anzol e muitas melhorias.">
+    <meta property="og:description" content="Jogue pescaria idle no navegador: 25 peixes, 4 zonas oceânicas, prestígio, missões diárias e física de anzol em tempo real.">
     <meta property="og:image" content="icon.svg">
     <meta property="og:locale" content="pt_BR">
 
     <!-- Twitter -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="Angelo Pescador — Idle Fishing">
-    <meta name="twitter:description" content="Jogue pescaria idle no navegador: 24 peixes, 4 zonas oceânicas, física de anzol e muitas melhorias.">
+    <meta name="twitter:description" content="Jogue pescaria idle no navegador: 25 peixes, 4 zonas oceânicas, prestígio, missões diárias e física de anzol em tempo real.">
     <meta name="twitter:image" content="icon.svg">
 
     <title>Angelo Pescador — Idle Fishing</title>
@@ -31,7 +31,7 @@
     <div class="game-container">
         <!-- CENA (CANVAS) -->
         <section class="ocean-panel" id="oceanPanel">
-            <canvas id="gameCanvas"></canvas>
+            <canvas id="gameCanvas" aria-label="Cena do oceano com peixes nadando"></canvas>
 
             <!-- UI OVERLAY -->
             <header class="zone-header glass">
@@ -40,28 +40,30 @@
                 <span class="depth-display">Profundidade até <span id="currentDepth">15</span>m</span>
             </header>
 
-            <div class="catch-showcase" id="catchShowcase"></div>
+            <div class="catch-showcase" id="catchShowcase" aria-live="polite" aria-atomic="false"></div>
 
             <div class="cast-controls">
-                <button class="cast-button" id="castButton">
+                <button class="cast-button" id="castButton" aria-label="Lançar anzol para iniciar pesca">
                     <span class="cast-text">🎣 LANÇAR ANZOL</span>
                     <span class="cast-progress" id="castProgress"></span>
                 </button>
                 <p class="controls-hint">
-                    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> mover anzol &nbsp;·&nbsp;
-                    <kbd>ESPAÇO</kbd> lançar
+                    <kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd> / <kbd>↑</kbd><kbd>←</kbd><kbd>↓</kbd><kbd>→</kbd> mover &nbsp;·&nbsp;
+                    <kbd>ESPAÇO</kbd> lançar &nbsp;·&nbsp;
+                    <kbd>P</kbd> pausar &nbsp;·&nbsp;
+                    <kbd>Ctrl+S</kbd> salvar
                 </p>
             </div>
         </section>
 
         <!-- PAINEL LATERAL -->
-        <aside class="shop-panel">
+        <aside class="shop-panel" aria-label="Painel de gerenciamento">
             <header class="status-panel">
                 <h1><span class="logo-mark">🎣</span> Angelo Pescador</h1>
                 <div class="stats">
                     <div class="stat-card money">
                         <span class="stat-label">Dinheiro</span>
-                        <span class="stat-value" id="money">$0</span>
+                        <span class="stat-value" id="money" aria-live="polite">$0</span>
                     </div>
                     <div class="stat-card">
                         <span class="stat-label">Total Pescado</span>
@@ -72,6 +74,16 @@
                         <span class="stat-value" id="passiveIncome">$0</span>
                     </div>
                 </div>
+                <div class="prestige-row">
+                    <button id="openPrestigeBtn" class="prestige-btn" aria-label="Abrir tela de prestígio">
+                        <span class="pearl-icon">🦪</span>
+                        <span>Pérolas: <strong id="topPearls">0</strong></span>
+                    </button>
+                    <button id="openTrophiesBtn" class="prestige-btn secondary" aria-label="Ver trofeus">
+                        <span>🏆</span>
+                        <span>Trofeus</span>
+                    </button>
+                </div>
             </header>
 
             <div class="zone-selector">
@@ -79,26 +91,128 @@
                 <div class="zones-grid" id="zonesGrid"></div>
             </div>
 
+            <div class="quests-section">
+                <h3>Missões Diárias <span class="quest-reset-info" id="questResetInfo"></span></h3>
+                <div class="quests-list" id="questsList"></div>
+            </div>
+
             <div class="upgrades-section">
                 <h3>Melhorias</h3>
                 <div class="upgrades-list" id="upgradesList"></div>
             </div>
 
+            <div class="consumables-section">
+                <h3>Loja de Itens</h3>
+                <div class="consumables-list" id="consumablesList"></div>
+            </div>
+
             <div class="compendium-section">
-                <h3>Compêndio <span id="compendiumCount" class="comp-counter">0 / 24 espécies</span></h3>
+                <h3>
+                    Compêndio
+                    <span id="compendiumCount" class="comp-counter">0 / 25 espécies</span>
+                </h3>
+                <div class="comp-filters">
+                    <button class="comp-filter-btn active" data-filter="all">Todos</button>
+                    <button class="comp-filter-btn" data-filter="caught">Capturados</button>
+                    <button class="comp-filter-btn" data-filter="missing">Faltam</button>
+                </div>
                 <div class="compendium-grid" id="compendiumGrid"></div>
             </div>
 
             <div class="log-panel">
                 <h3>Diário do Pescador</h3>
-                <ul id="fishingLog"></ul>
+                <ul id="fishingLog" aria-live="polite" aria-atomic="false"></ul>
             </div>
 
             <div class="controls">
-                <button id="saveBtn" class="control-btn">💾 Salvar</button>
-                <button id="resetBtn" class="control-btn danger">🔄 Reiniciar</button>
+                <button id="saveBtn" class="control-btn" aria-label="Salvar progresso">💾 Salvar</button>
+                <button id="resetBtn" class="control-btn danger" aria-label="Reiniciar jogo">🔄 Reiniciar</button>
             </div>
+
+            <footer class="app-footer">
+                <span class="version-tag">v2.0 · <a href="https://github.com/crookshank-br/angelo-pescador" target="_blank" rel="noopener">GitHub</a></span>
+            </footer>
         </aside>
+    </div>
+
+    <!-- MODAL DE PRESTÍGIO -->
+    <div class="modal-backdrop" id="prestigeModal" role="dialog" aria-modal="true" aria-labelledby="prestigeTitle">
+        <div class="modal-content">
+            <button class="modal-close" id="closePrestigeBtn" aria-label="Fechar">×</button>
+            <h2 id="prestigeTitle"><span class="pearl-icon">🦪</span> Prestígio: Pérolas</h2>
+            <p class="modal-desc">
+                Resete dinheiro, peixes e melhorias para ganhar <strong>Pérolas</strong> permanentes que dão bônus eternos.
+                <br><small>O compêndio e as conquistas são preservados.</small>
+            </p>
+            <div class="prestige-stats">
+                <div class="prestige-stat">
+                    <span class="stat-label">Pérolas atuais</span>
+                    <span class="stat-value-large" id="prestigePearls">0</span>
+                </div>
+                <div class="prestige-stat">
+                    <span class="stat-label">Você ganharia agora</span>
+                    <span class="stat-value-large gold" id="prestigeAvailable">0</span>
+                </div>
+                <div class="prestige-stat">
+                    <span class="stat-label">Total ganho histórico</span>
+                    <span class="stat-value-large" id="prestigeTotal">0</span>
+                </div>
+            </div>
+            <button class="prestige-go-btn" id="prestigeBtn">🦪 PRESTIGIAR AGORA</button>
+            <div class="prestige-divider"></div>
+            <h3 class="prestige-bonus-title">Gastar Pérolas em Bônus Permanentes</h3>
+            <div class="prestige-bonuses">
+                <div class="pearl-bonus-card">
+                    <div class="pbc-info">
+                        <strong>💰 Mercado das Pérolas</strong>
+                        <small>+5% no valor de cada peixe (permanente)</small>
+                        <span class="pbc-level">Nível: <strong id="prestigeBonusValue">0</strong></span>
+                    </div>
+                    <button class="pbc-buy" data-bonus="value">Gastar 1 🦪</button>
+                </div>
+                <div class="pearl-bonus-card">
+                    <div class="pbc-info">
+                        <strong>🐟 Cardume Permanente</strong>
+                        <small>+5% rede passiva (permanente)</small>
+                        <span class="pbc-level">Nível: <strong id="prestigeBonusSpawn">0</strong></span>
+                    </div>
+                    <button class="pbc-buy" data-bonus="spawn">Gastar 1 🦪</button>
+                </div>
+                <div class="pearl-bonus-card">
+                    <div class="pbc-info">
+                        <strong>🪝 Anzol Sortudo</strong>
+                        <small>Reservado — em breve</small>
+                        <span class="pbc-level">Nível: <strong id="prestigeBonusMulti">0</strong></span>
+                    </div>
+                    <button class="pbc-buy" data-bonus="multi" disabled>Em breve</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE TROFEUS -->
+    <div class="modal-backdrop" id="trophiesModal" role="dialog" aria-modal="true" aria-labelledby="trophiesTitle">
+        <div class="modal-content">
+            <button class="modal-close" id="closeTrophiesBtn" aria-label="Fechar">×</button>
+            <h2 id="trophiesTitle">🏆 Trofeus & Estatísticas</h2>
+            <div class="trophies-grid" id="trophiesGrid"></div>
+        </div>
+    </div>
+
+    <!-- TUTORIAL OVERLAY -->
+    <div class="tutorial-overlay" id="tutorialOverlay" role="dialog" aria-modal="true">
+        <div class="tutorial-card">
+            <h2>🎣 Bem-vindo, pescador!</h2>
+            <ol class="tutorial-steps">
+                <li><strong>Lance o anzol</strong> com <kbd>ESPAÇO</kbd> ou clicando no botão azul.</li>
+                <li><strong>Mova o anzol</strong> com <kbd>WASD</kbd> ou setas para perseguir os peixes.</li>
+                <li><strong>Capture peixes</strong> aproximando o anzol — peixes raros fogem!</li>
+                <li><strong>Compre melhorias</strong> com seu dinheiro pra evoluir.</li>
+                <li><strong>Desbloqueie zonas</strong> mais profundas comprando o Motor.</li>
+                <li><strong>Atinge $500k?</strong> Faça <strong>Prestígio</strong> e ganhe Pérolas eternas! 🦪</li>
+            </ol>
+            <button class="tutorial-ok" id="tutorialOkBtn">Bora pescar! 🎣</button>
+        </div>
     </div>
 
     <script src="main.js"></script>
