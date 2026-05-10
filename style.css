@@ -1964,40 +1964,64 @@ canvas { touch-action: none; }
    Stack vertical: canvas em cima, painel embaixo
    ============================================ */
 @media (max-width: 700px) and (orientation: portrait), (max-width: 480px) {
-    /* Em mobile portrait, abrimos o scroll da PÁGINA inteira:
-       - canvas fixo em 55vh no topo
-       - painel cresce livremente e o body rola */
-    html, body { overflow-y: auto; height: auto; }
+    /* Em mobile portrait: scroll na página inteira, canvas em cima, painel embaixo.
+       IMPORTANTE: NÃO usar overflow-x: hidden em html/body — quebra position: sticky! */
+    html, body {
+        overflow: visible;
+        height: auto;
+        min-height: 100%;
+    }
     .game-container {
-        grid-template-columns: 1fr;
-        grid-template-rows: auto 1fr;
+        display: block;        /* fim do grid em mobile — block layout simples */
         height: auto;
         min-height: 100vh;
+        width: 100%;
+        max-width: 100vw;
+        overflow-x: clip;       /* evita scroll horizontal sem quebrar sticky em filhos */
     }
     .ocean-panel {
-        height: 55vh;
-        position: sticky;
-        top: 0;
-        z-index: 5;
-        border-bottom: 1px solid var(--panel-border);
+        position: relative;     /* canvas no topo, rola junto com a página */
+        height: 60vh;
+        width: 100%;
+        border-bottom: 2px solid var(--panel-border);
     }
     .shop-panel {
-        height: auto;          /* painel cresce com o conteúdo */
-        overflow: visible;      /* não corta nada */
-        padding: 12px;
-        gap: 10px;
+        position: relative;
+        height: auto;
+        width: 100%;
+        overflow: visible;
+        padding: 14px;
+        gap: 12px;
         border-left: none;
-        border-top: 1px solid var(--panel-border);
+        border-top: none;
+        box-shadow: none;
     }
-    /* tabs-content também sem altura fixa */
+    /* tabs-content sem altura fixa, sem scroll interno */
     .panel-tabs-content {
         overflow: visible;
         flex: none;
+        margin-right: 0;
+        padding-right: 0;
+    }
+    /* tabs grudam no topo enquanto o usuário rola — NUNCA somem */
+    .panel-tabs {
+        position: sticky;
+        top: 0;
+        z-index: 6;
+        background: rgba(6, 26, 54, 0.97);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        margin: 0 -14px 4px;
+        padding: 6px 14px;
+        border-radius: 0;
+        border-left: none;
+        border-right: none;
+        border-bottom: 1px solid var(--panel-border);
     }
     /* Compêndio com altura confortável em mobile */
     .compendium-grid { max-height: none; }
-    /* Log do Pescador também sem altura fixa */
-    #fishingLog { max-height: 320px; }
+    /* Log do Pescador com altura razoável em mobile */
+    #fishingLog { max-height: 280px; }
     /* Canvas overlays */
     .zone-header {
         top: 8px;
