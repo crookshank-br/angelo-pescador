@@ -467,6 +467,7 @@ function sellFish(f) {
     if (isNew) {
         setTimeout(updateCompendium, 0);
         showNewSpeciesToast(f);
+        notifyTab('dex');
     }
     return v;
 }
@@ -2341,6 +2342,7 @@ function questProgress(track, n) {
                 addLog(`📋 Missão concluída! +${fmtMoney(q.reward)}`);
                 showAchievementToast({ name: 'Missão Concluída', desc: q.desc });
                 SFX.upgrade();
+                notifyTab('quests');
             }
         }
     }
@@ -2664,6 +2666,25 @@ function slowUpdate() {
     if (tp) tp.textContent = state.pearls || 0;
 }
 
+function switchTab(tabId) {
+    document.querySelectorAll('.panel-tab').forEach(t => {
+        const active = t.dataset.tab === tabId;
+        t.classList.toggle('active', active);
+        t.setAttribute('aria-selected', active ? 'true' : 'false');
+        if (active) t.classList.remove('has-notification');
+    });
+    document.querySelectorAll('.tab-pane').forEach(p => {
+        p.classList.toggle('active', p.dataset.pane === tabId);
+    });
+}
+
+function notifyTab(tabId) {
+    const tab = document.querySelector(`.panel-tab[data-tab="${tabId}"]`);
+    if (tab && !tab.classList.contains('active')) {
+        tab.classList.add('has-notification');
+    }
+}
+
 function autoSave() { saveGame(); }
 
 // =================================================================
@@ -2732,6 +2753,10 @@ function init() {
     // Filtros do compêndio
     document.querySelectorAll('.comp-filter-btn').forEach(b => {
         b.addEventListener('click', () => setCompFilter(b.dataset.filter));
+    });
+    // Sistema de abas
+    document.querySelectorAll('.panel-tab').forEach(tab => {
+        tab.addEventListener('click', () => switchTab(tab.dataset.tab));
     });
     // Tutorial
     document.getElementById('tutorialOkBtn')?.addEventListener('click', () => {

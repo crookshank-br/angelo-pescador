@@ -86,42 +86,64 @@
                 </div>
             </header>
 
-            <div class="zone-selector">
-                <h3>Explorar Zonas</h3>
-                <div class="zones-grid" id="zonesGrid"></div>
-            </div>
+            <!-- ABAS -->
+            <nav class="panel-tabs" role="tablist">
+                <button class="panel-tab active" data-tab="fish" role="tab" aria-selected="true">🎣 Pescaria</button>
+                <button class="panel-tab"        data-tab="quests" role="tab">📋 Missões</button>
+                <button class="panel-tab"        data-tab="dex" role="tab">📚 Espécies</button>
+                <button class="panel-tab"        data-tab="log" role="tab">📜 Diário</button>
+            </nav>
 
-            <div class="quests-section">
-                <h3>Missões Diárias <span class="quest-reset-info" id="questResetInfo"></span></h3>
-                <div class="quests-list" id="questsList"></div>
-            </div>
+            <div class="panel-tabs-content">
+                <!-- TAB: PESCARIA (zonas + melhorias + loja) -->
+                <div class="tab-pane active" data-pane="fish" role="tabpanel">
+                    <div class="zone-selector">
+                        <h3>Explorar Zonas</h3>
+                        <div class="zones-grid" id="zonesGrid"></div>
+                    </div>
 
-            <div class="upgrades-section">
-                <h3>Melhorias</h3>
-                <div class="upgrades-list" id="upgradesList"></div>
-            </div>
+                    <div class="upgrades-section">
+                        <h3>Melhorias</h3>
+                        <div class="upgrades-list" id="upgradesList"></div>
+                    </div>
 
-            <div class="consumables-section">
-                <h3>Loja de Itens</h3>
-                <div class="consumables-list" id="consumablesList"></div>
-            </div>
-
-            <div class="compendium-section">
-                <h3>
-                    Compêndio
-                    <span id="compendiumCount" class="comp-counter">0 / 25 espécies</span>
-                </h3>
-                <div class="comp-filters">
-                    <button class="comp-filter-btn active" data-filter="all">Todos</button>
-                    <button class="comp-filter-btn" data-filter="caught">Capturados</button>
-                    <button class="comp-filter-btn" data-filter="missing">Faltam</button>
+                    <div class="consumables-section">
+                        <h3>Loja de Itens</h3>
+                        <div class="consumables-list" id="consumablesList"></div>
+                    </div>
                 </div>
-                <div class="compendium-grid" id="compendiumGrid"></div>
-            </div>
 
-            <div class="log-panel">
-                <h3>Diário do Pescador</h3>
-                <ul id="fishingLog" aria-live="polite" aria-atomic="false"></ul>
+                <!-- TAB: MISSÕES -->
+                <div class="tab-pane" data-pane="quests" role="tabpanel">
+                    <div class="quests-section">
+                        <h3>Missões Diárias <span class="quest-reset-info" id="questResetInfo"></span></h3>
+                        <div class="quests-list" id="questsList"></div>
+                    </div>
+                </div>
+
+                <!-- TAB: COMPÊNDIO -->
+                <div class="tab-pane" data-pane="dex" role="tabpanel">
+                    <div class="compendium-section">
+                        <h3>
+                            Compêndio
+                            <span id="compendiumCount" class="comp-counter">0 / 25 espécies</span>
+                        </h3>
+                        <div class="comp-filters">
+                            <button class="comp-filter-btn active" data-filter="all">Todos</button>
+                            <button class="comp-filter-btn" data-filter="caught">Capturados</button>
+                            <button class="comp-filter-btn" data-filter="missing">Faltam</button>
+                        </div>
+                        <div class="compendium-grid" id="compendiumGrid"></div>
+                    </div>
+                </div>
+
+                <!-- TAB: DIÁRIO -->
+                <div class="tab-pane" data-pane="log" role="tabpanel">
+                    <div class="log-panel log-panel-tabbed">
+                        <h3>Diário do Pescador</h3>
+                        <ul id="fishingLog" aria-live="polite" aria-atomic="false"></ul>
+                    </div>
+                </div>
             </div>
 
             <div class="controls">
