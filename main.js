@@ -405,10 +405,9 @@ function sellFish(f) {
     state.totalFish += 1;
     // Tracking de espécies e lendários
     if (!state._speciesCaught) state._speciesCaught = {};
+    const isNew = !state._speciesCaught[f.name];   // verificar ANTES de setar
     state._speciesCaught[f.name] = true;
     if (f.rarity === 'legendary') state._legendaryCaught = true;
-    // Atualiza compêndio (lazy — só se é espécie nova)
-    const isNew = !state._speciesCaught[f.name];
     if (isNew) setTimeout(updateCompendium, 0);
     return v;
 }
@@ -1860,7 +1859,7 @@ function buildCompendium() {
         const cell = document.createElement('div');
         cell.className = 'comp-cell';
         cell.dataset.index = i;
-        cell.title = f.name;
+        cell.title = caught ? `${f.name} · ${f.rarity} · ${fmtMoney(f.baseValue)}` : '???';
         const caught = (state._speciesCaught || {})[f.name];
         cell.innerHTML = `
             <span class="comp-emoji">${caught ? f.emoji : '❓'}</span>
@@ -1941,6 +1940,7 @@ function resetGame() {
     updateUpgradeCards();
     updateZoneCards();
     updateStats();
+    buildCompendium();
     addLog('🔄 Jogo reiniciado');
 }
 
