@@ -286,13 +286,15 @@ button { font-family: inherit; }
     pointer-events: none;
 }
 
-.cast-button:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow:
-        0 8px 28px rgba(0, 212, 255, 0.55),
-        inset 0 1px 0 rgba(255, 255, 255, 0.3),
-        inset 0 -3px 0 rgba(0, 0, 0, 0.3);
-    background: linear-gradient(135deg, #2389c2, #114a72);
+@media (hover: hover) {
+    .cast-button:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow:
+            0 8px 28px rgba(0, 212, 255, 0.55),
+            inset 0 1px 0 rgba(255, 255, 255, 0.3),
+            inset 0 -3px 0 rgba(0, 0, 0, 0.3);
+        background: linear-gradient(135deg, #2389c2, #114a72);
+    }
 }
 
 .cast-button:active:not(:disabled) {
@@ -472,10 +474,12 @@ button { font-family: inherit; }
     pointer-events: none;
 }
 
-.zone-card:hover:not(:disabled) {
-    background: linear-gradient(135deg, rgba(30, 90, 138, 0.85), rgba(10, 61, 98, 0.85));
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
+@media (hover: hover) {
+    .zone-card:hover:not(:disabled) {
+        background: linear-gradient(135deg, rgba(30, 90, 138, 0.85), rgba(10, 61, 98, 0.85));
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 212, 255, 0.2);
+    }
 }
 
 .zone-card.active {
@@ -532,9 +536,11 @@ button { font-family: inherit; }
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.05);
 }
 
-.upgrade-card:hover {
-    border-color: rgba(0, 212, 255, 0.5);
-    background: linear-gradient(135deg, rgba(30, 90, 138, 0.65), rgba(10, 61, 98, 0.65));
+@media (hover: hover) {
+    .upgrade-card:hover {
+        border-color: rgba(0, 212, 255, 0.5);
+        background: linear-gradient(135deg, rgba(30, 90, 138, 0.65), rgba(10, 61, 98, 0.65));
+    }
 }
 
 .upgrade-info {
@@ -588,11 +594,13 @@ button { font-family: inherit; }
     box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
-.upgrade-buy-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--cyan-accent), #0099cc);
-    color: var(--deep-blue);
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+@media (hover: hover) {
+    .upgrade-buy-btn:hover:not(:disabled) {
+        background: linear-gradient(135deg, var(--cyan-accent), #0099cc);
+        color: var(--deep-blue);
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(0, 212, 255, 0.4);
+    }
 }
 
 .upgrade-buy-btn:active:not(:disabled) {
@@ -674,11 +682,13 @@ button { font-family: inherit; }
     overflow: hidden;
 }
 
-.comp-cell:hover {
-    border-color: rgba(0, 212, 255, 0.4);
-    background: rgba(10, 61, 98, 0.5);
-    z-index: 1;
-    transform: scale(1.08);
+@media (hover: hover) {
+    .comp-cell:hover {
+        border-color: rgba(0, 212, 255, 0.4);
+        background: rgba(10, 61, 98, 0.5);
+        z-index: 1;
+        transform: scale(1.08);
+    }
 }
 
 .comp-cell.comp-caught {
@@ -777,14 +787,15 @@ button { font-family: inherit; }
     letter-spacing: 0.3px;
 }
 
-.control-btn:hover {
-    background: var(--mid-blue);
-    border-color: var(--cyan-accent);
-}
-
-.control-btn.danger:hover {
-    background: var(--danger);
-    border-color: var(--danger);
+@media (hover: hover) {
+    .control-btn:hover {
+        background: var(--mid-blue);
+        border-color: var(--cyan-accent);
+    }
+    .control-btn.danger:hover {
+        background: var(--danger);
+        border-color: var(--danger);
+    }
 }
 
 /* Save toast */
@@ -886,8 +897,10 @@ button { font-family: inherit; }
     overflow: hidden;
     text-overflow: ellipsis;
 }
-.panel-tab:hover:not(.active) {
-    background: rgba(0, 212, 255, 0.1);
+@media (hover: hover) {
+    .panel-tab:hover:not(.active) {
+        background: rgba(0, 212, 255, 0.1);
+    }
 }
 .panel-tab.active {
     background: linear-gradient(135deg, var(--cyan-accent), #0099cc);
@@ -981,17 +994,19 @@ button { font-family: inherit; }
     cursor: pointer;
     transition: all var(--trans-fast);
 }
-.prestige-btn:hover {
-    background: linear-gradient(135deg, rgba(187, 134, 252, 0.3), rgba(0, 212, 255, 0.2));
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(187, 134, 252, 0.3);
+@media (hover: hover) {
+    .prestige-btn:hover {
+        background: linear-gradient(135deg, rgba(187, 134, 252, 0.3), rgba(0, 212, 255, 0.2));
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(187, 134, 252, 0.3);
+    }
+    .prestige-btn.secondary:hover {
+        background: linear-gradient(135deg, rgba(255, 215, 0, 0.25), rgba(30, 90, 138, 0.6));
+    }
 }
 .prestige-btn.secondary {
     border-color: rgba(255, 215, 0, 0.4);
     background: linear-gradient(135deg, rgba(255, 215, 0, 0.1), rgba(10, 61, 98, 0.5));
-}
-.prestige-btn.secondary:hover {
-    background: linear-gradient(135deg, rgba(255, 215, 0, 0.25), rgba(30, 90, 138, 0.6));
 }
 .prestige-btn strong { color: var(--legendary); }
 .pearl-icon { font-size: 14px; filter: drop-shadow(0 0 4px rgba(220, 180, 255, 0.6)); }
@@ -1106,9 +1121,11 @@ button { font-family: inherit; }
     font-family: var(--font-mono);
     letter-spacing: 0.3px;
 }
-.cons-buy-btn:hover:not(:disabled) {
-    background: linear-gradient(135deg, var(--cyan-accent), #0099cc);
-    color: var(--deep-blue);
+@media (hover: hover) {
+    .cons-buy-btn:hover:not(:disabled) {
+        background: linear-gradient(135deg, var(--cyan-accent), #0099cc);
+        color: var(--deep-blue);
+    }
 }
 .cons-buy-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .cons-use-btn {
@@ -1124,9 +1141,11 @@ button { font-family: inherit; }
     transition: all var(--trans-fast);
     margin-top: 2px;
 }
-.cons-use-btn:hover:not(:disabled) {
-    background: var(--success);
-    color: var(--deep-blue);
+@media (hover: hover) {
+    .cons-use-btn:hover:not(:disabled) {
+        background: var(--success);
+        color: var(--deep-blue);
+    }
 }
 .cons-use-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
@@ -1151,9 +1170,11 @@ button { font-family: inherit; }
     cursor: pointer;
     transition: all var(--trans-fast);
 }
-.comp-filter-btn:hover {
-    background: rgba(10, 61, 98, 0.7);
-    border-color: var(--cyan-accent);
+@media (hover: hover) {
+    .comp-filter-btn:hover {
+        background: rgba(10, 61, 98, 0.7);
+        border-color: var(--cyan-accent);
+    }
 }
 .comp-filter-btn.active {
     background: var(--cyan-accent);
@@ -1387,7 +1408,9 @@ button { font-family: inherit; }
     display: flex; align-items: center; justify-content: center;
     transition: all var(--trans-fast);
 }
-.modal-close:hover { background: var(--danger); }
+@media (hover: hover) {
+    .modal-close:hover { background: var(--danger); }
+}
 
 .modal-desc { font-size: 13px; line-height: 1.5; opacity: 0.9; margin-bottom: 18px; }
 .modal-desc small { font-size: 11px; opacity: 0.8; }
@@ -1432,9 +1455,11 @@ button { font-family: inherit; }
     transition: all var(--trans-fast);
     box-shadow: 0 6px 20px rgba(187, 134, 252, 0.4);
 }
-.prestige-go-btn:hover:not(:disabled) {
-    transform: translateY(-2px);
-    box-shadow: 0 10px 30px rgba(187, 134, 252, 0.6);
+@media (hover: hover) {
+    .prestige-go-btn:hover:not(:disabled) {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 30px rgba(187, 134, 252, 0.6);
+    }
 }
 .prestige-go-btn:disabled {
     opacity: 0.4;
@@ -1487,9 +1512,11 @@ button { font-family: inherit; }
     transition: all var(--trans-fast);
     white-space: nowrap;
 }
-.pbc-buy:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(187, 134, 252, 0.5);
+@media (hover: hover) {
+    .pbc-buy:hover:not(:disabled) {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 12px rgba(187, 134, 252, 0.5);
+    }
 }
 .pbc-buy:disabled { opacity: 0.4; cursor: not-allowed; }
 
@@ -1597,9 +1624,11 @@ button { font-family: inherit; }
     cursor: pointer;
     transition: all var(--trans-fast);
 }
-.tutorial-ok:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(0, 212, 255, 0.5);
+@media (hover: hover) {
+    .tutorial-ok:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 212, 255, 0.5);
+    }
 }
 
 /* OFFLINE EARNINGS TOAST */
@@ -1642,7 +1671,9 @@ button { font-family: inherit; }
     font-size: 18px;
     transition: background var(--trans-fast);
 }
-.offline-close:hover { background: var(--danger); }
+@media (hover: hover) {
+    .offline-close:hover { background: var(--danger); }
+}
 @keyframes offEnter {
     from { opacity: 0; transform: translate(-50%, -30px); }
     to   { opacity: 1; transform: translate(-50%, 0); }
@@ -1665,17 +1696,476 @@ button { font-family: inherit; }
     color: var(--cyan-accent);
     text-decoration: none;
 }
-.version-tag a:hover { text-decoration: underline; }
+@media (hover: hover) {
+    .version-tag a:hover { text-decoration: underline; }
+}
 
 /* ============================================
-   RESPONSIVO
+   TOUCH BEHAVIOR GLOBAL
    ============================================ */
-@media (max-width: 900px) {
+* { -webkit-tap-highlight-color: transparent; }
+
+button,
+.zone-card,
+.upgrade-card,
+.comp-cell,
+.panel-tab,
+.comp-filter-btn,
+.control-btn,
+.cons-buy-btn,
+.cons-use-btn,
+.upgrade-buy-btn,
+.prestige-btn,
+.pbc-buy,
+.modal-close,
+.tutorial-ok,
+.prestige-go-btn,
+.offline-close,
+.cast-button {
+    touch-action: manipulation;
+    -webkit-touch-callout: none;
+}
+
+canvas { touch-action: none; }
+.modal-content,
+.tutorial-card,
+.panel-tabs-content,
+#fishingLog,
+.compendium-grid { -webkit-overflow-scrolling: touch; }
+
+/* ============================================
+   BOTÃO FLUTUANTE DE PAUSA (mobile/touch)
+   ============================================ */
+.floating-pause {
+    position: absolute;
+    top: 14px;
+    left: 14px;
+    z-index: 8;
+    width: 46px;
+    height: 46px;
+    background: rgba(2, 8, 20, 0.78);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border: 1px solid var(--panel-border);
+    border-radius: 50%;
+    color: var(--white);
+    font-size: 18px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+    transition: transform var(--trans-fast), background var(--trans-fast);
+}
+.floating-pause:active {
+    transform: scale(0.92);
+    background: rgba(0, 212, 255, 0.3);
+}
+@media (pointer: coarse) {
+    .floating-pause { display: flex; }
+}
+
+/* ============================================
+   ACTIVE STATES (feedback de toque)
+   Funcionam em qualquer dispositivo + complementam :hover desktop
+   ============================================ */
+.zone-card:active:not(:disabled),
+.upgrade-card:active,
+.comp-cell:active,
+.upgrade-buy-btn:active:not(:disabled),
+.control-btn:active,
+.panel-tab:active:not(.active),
+.prestige-btn:active,
+.cons-buy-btn:active:not(:disabled),
+.cons-use-btn:active:not(:disabled),
+.comp-filter-btn:active,
+.pbc-buy:active:not(:disabled),
+.tutorial-ok:active,
+.prestige-go-btn:active:not(:disabled),
+.offline-close:active,
+.modal-close:active {
+    transform: scale(0.96);
+    transition: transform 80ms ease;
+}
+
+.cast-button:active:not(:disabled) {
+    transform: translateY(2px) scale(0.98);
+    transition: transform 80ms ease;
+}
+
+/* Desktop hover-only — encapsula os :hover existentes pra não dispararem em touch */
+@media (hover: none) {
+    .zone-card:hover:not(:disabled),
+    .upgrade-card:hover,
+    .comp-cell:hover,
+    .upgrade-buy-btn:hover:not(:disabled),
+    .control-btn:hover,
+    .panel-tab:hover:not(.active),
+    .prestige-btn:hover,
+    .cons-buy-btn:hover:not(:disabled),
+    .comp-filter-btn:hover,
+    .pbc-buy:hover:not(:disabled),
+    .modal-close:hover {
+        /* desabilita estilos hover em devices touch — eles ficavam "presos" após o tap */
+        transform: none;
+        box-shadow: none;
+    }
+}
+
+/* ============================================
+   TOUCH TARGETS ≥44px (Apple/Google guideline)
+   ============================================ */
+@media (pointer: coarse) {
+    .panel-tab {
+        padding: 12px 6px;
+        min-height: 44px;
+        font-size: 12px;
+    }
+    .upgrade-buy-btn {
+        padding: 12px;
+        min-height: 44px;
+        min-width: 100px;
+    }
+    .zone-card {
+        padding: 14px 12px;
+        min-height: 64px;
+    }
+    .comp-cell {
+        padding: 9px 5px 7px;
+        min-height: 52px;
+    }
+    .control-btn {
+        padding: 12px;
+        min-height: 44px;
+        font-size: 12.5px;
+    }
+    .modal-close {
+        width: 40px;
+        height: 40px;
+        font-size: 24px;
+    }
+    .pbc-buy {
+        padding: 10px 14px;
+        min-height: 40px;
+    }
+    .comp-filter-btn {
+        padding: 9px 8px;
+        min-height: 38px;
+    }
+    .cons-buy-btn,
+    .cons-use-btn {
+        padding: 8px 6px;
+        min-height: 36px;
+    }
+    .prestige-btn {
+        padding: 12px 10px;
+        min-height: 44px;
+    }
+    .tutorial-ok {
+        padding: 16px;
+        font-size: 16px;
+    }
+    .prestige-go-btn {
+        padding: 16px;
+        font-size: 16px;
+    }
+    /* Joystick virtual maior em coarse pointer */
+    /* (raio é controlado em JS — touchState.radius — não precisa CSS) */
+}
+
+/* ============================================
+   FONTES LEGÍVEIS EM MOBILE
+   ============================================ */
+@media (max-width: 700px), (pointer: coarse) {
+    .comp-name { font-size: 10px !important; }
+    .comp-value { font-size: 9.5px; }
+    .zone-lock { font-size: 10px; }
+    .quest-progress { font-size: 10px; }
+    .stat-label { font-size: 10px; }
+    .upgrade-cost-label { font-size: 9px; }
+    .controls-hint { font-size: 12px; }
+    .controls-hint kbd { font-size: 11px; }
+    .upgrade-desc { font-size: 11.5px; line-height: 1.4; }
+}
+
+/* ============================================
+   BREAKPOINT 1: Tablet / laptop pequeno (701-1100px)
+   Mantém side-by-side mas com painel comprimido
+   ============================================ */
+@media (max-width: 1100px) and (min-width: 701px) {
+    .shop-panel {
+        padding: 14px;
+        gap: 11px;
+    }
+    .stat-card { padding: 9px 6px; }
+    .stat-value { font-size: 14px; }
+    .status-panel h1 { font-size: 18px; }
+    .upgrade-card { padding: 9px 10px; }
+    .upgrade-name { font-size: 12px; }
+    .compendium-grid { gap: 4px; }
+    .comp-cell { padding: 4px 2px 3px; }
+    .comp-emoji { font-size: 18px; }
+    .panel-tab { padding: 8px 4px; font-size: 10.5px; }
+    .modal-content { padding: 22px; }
+    .tutorial-card { padding: 24px; }
+}
+
+/* ============================================
+   BREAKPOINT 2: Mobile landscape (≤700px landscape)
+   Lado a lado bem comprimido
+   ============================================ */
+@media (max-width: 900px) and (orientation: landscape) {
+    .game-container {
+        grid-template-columns: 1.4fr 1fr;
+    }
+    .shop-panel { padding: 10px; gap: 9px; }
+    .controls-hint { display: none; }
+    .zone-card-preview { display: none; }
+    .cast-controls { height: 80px; }
+    .cast-button {
+        padding: 12px 32px;
+        min-width: 200px;
+        font-size: 14px;
+        letter-spacing: 1.5px;
+    }
+    .zone-header { top: 8px; padding: 6px 16px; }
+    .zone-header h2 { font-size: 16px; }
+    .zone-label, .depth-display { font-size: 9px; }
+    .catch-showcase {
+        top: 60px;
+        right: 10px;
+        width: 180px;
+    }
+    .big-catch-card { padding: 8px 12px; }
+    .big-catch-card .fish-big { font-size: 38px; }
+    .big-catch-card .fish-name { font-size: 11px; }
+    .big-catch-card .fish-value { font-size: 14px; }
+    .modal-content { padding: 16px; max-height: 92vh; }
+    .modal-content h2 { font-size: 18px; }
+    .prestige-stats { grid-template-columns: 1fr 1fr 1fr; gap: 6px; }
+    .stat-value-large { font-size: 18px; }
+    .tutorial-card { padding: 18px; }
+    .tutorial-card h2 { font-size: 20px; }
+    .tutorial-steps { gap: 10px; }
+    .tutorial-steps li { font-size: 12px; padding-left: 36px; }
+    .tutorial-steps li::before { width: 26px; height: 26px; font-size: 12px; }
+    /* Painel mais comprimido */
+    .compendium-grid { grid-template-columns: repeat(5, 1fr); }
+}
+
+/* ============================================
+   BREAKPOINT 3: Mobile portrait OR muito pequeno
+   Stack vertical: canvas em cima, painel embaixo
+   ============================================ */
+@media (max-width: 700px) and (orientation: portrait), (max-width: 480px) {
     .game-container {
         grid-template-columns: 1fr;
-        grid-template-rows: 1fr 1fr;
+        grid-template-rows: 55vh 1fr;
     }
-    .modal-content { padding: 20px; }
-    .prestige-stats { grid-template-columns: 1fr; }
-    .stat-value-large { font-size: 22px; }
+    .ocean-panel {
+        height: 55vh;
+        border-bottom: 1px solid var(--panel-border);
+    }
+    .shop-panel {
+        height: 45vh;
+        padding: 12px;
+        gap: 10px;
+        border-left: none;
+        border-top: 1px solid var(--panel-border);
+    }
+    /* Canvas overlays */
+    .zone-header {
+        top: 8px;
+        padding: 5px 14px;
+    }
+    .zone-header h2 { font-size: 15px; }
+    .zone-label, .depth-display { font-size: 9px; letter-spacing: 1.5px; }
+
+    .catch-showcase {
+        top: 56px;
+        right: 8px;
+        left: 8px;
+        width: auto;
+    }
+    .big-catch-card {
+        padding: 7px 11px;
+        gap: 10px;
+    }
+    .big-catch-card .fish-big { font-size: 34px; }
+    .big-catch-card .fish-name { font-size: 11px; }
+    .big-catch-card .fish-value { font-size: 13px; }
+    .fish-rarity-tag { font-size: 8px; padding: 1px 4px; }
+
+    .cast-controls {
+        height: 78px;
+        padding: 8px;
+    }
+    .cast-button {
+        padding: 12px 22px;
+        min-width: 200px;
+        font-size: 13px;
+        letter-spacing: 1.5px;
+    }
+    .controls-hint { display: none; }
+
+    /* Stats mais compactas */
+    .status-panel h1 {
+        font-size: 17px;
+        margin-bottom: 10px;
+    }
+    .stats { gap: 6px; }
+    .stat-card { padding: 8px 5px; }
+    .stat-value { font-size: 13px; }
+    .stat-label { font-size: 8.5px; letter-spacing: 1.1px; }
+    .prestige-row { margin-top: 8px; gap: 6px; }
+    .prestige-btn {
+        padding: 10px 8px;
+        font-size: 10.5px;
+    }
+
+    /* Tabs compactas */
+    .panel-tabs { padding: 3px; gap: 3px; }
+    .panel-tab {
+        padding: 11px 4px;
+        font-size: 10.5px;
+        letter-spacing: 0.2px;
+    }
+
+    /* Cards de zona */
+    .zones-grid { gap: 6px; }
+    .zone-card {
+        padding: 10px 9px;
+        min-height: 56px;
+    }
+    .zone-card-name { font-size: 12px; }
+    .zone-card-depth { font-size: 9.5px; }
+    .zone-card-preview { font-size: 12px; margin-top: 3px; }
+    .zone-lock { font-size: 9px; }
+
+    /* Upgrades */
+    .upgrade-card { padding: 9px 10px; gap: 8px; }
+    .upgrade-name { font-size: 11.5px; }
+    .upgrade-icon { font-size: 14px; }
+    .upgrade-desc { font-size: 10.5px; }
+    .upgrade-buy-btn {
+        padding: 10px 8px;
+        min-width: 78px;
+        font-size: 10px;
+    }
+    .upgrade-cost { font-size: 11.5px; }
+    .upgrade-cost-label { font-size: 7.5px; }
+
+    /* Compêndio: 4 colunas em vez de 6 (cells maiores em mobile) */
+    .compendium-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 5px;
+        max-height: 240px;
+    }
+    .comp-cell {
+        padding: 8px 4px 6px;
+        min-height: 56px;
+    }
+    .comp-emoji { font-size: 22px; }
+    .comp-rarity { width: 8px; height: 8px; top: 4px; right: 4px; }
+
+    /* Filtros + missões + loja com padding maior pra toque */
+    .comp-filter-btn { padding: 10px 8px; font-size: 11px; }
+    .quest-item { padding: 11px 12px; }
+    .quest-desc { font-size: 12px; }
+    .quest-reward { font-size: 11px; }
+    .quest-bar { height: 6px; }
+    .consumables-list { gap: 5px; }
+    .consumable-card { padding: 9px 5px; }
+    .cons-icon { font-size: 24px; }
+    .cons-name { font-size: 10px; }
+    .cons-buy-btn, .cons-use-btn { padding: 7px 4px; font-size: 9.5px; }
+
+    /* Log */
+    #fishingLog { font-size: 11.5px; }
+    .log-panel-tabbed { padding: 10px 12px; }
+
+    /* Modais full-screen friendly */
+    .modal-backdrop { padding: 12px; }
+    .modal-content {
+        padding: 18px;
+        max-height: 92vh;
+        border-radius: 14px;
+    }
+    .modal-content h2 { font-size: 19px; }
+    .modal-desc { font-size: 12.5px; }
+    .prestige-stats {
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+    }
+    .prestige-stat { padding: 10px; }
+    .stat-value-large { font-size: 20px; }
+    .prestige-go-btn { padding: 13px; font-size: 14px; letter-spacing: 1px; }
+    .pearl-bonus-card { padding: 10px; }
+    .pbc-info strong { font-size: 12px; }
+    .pbc-info small { font-size: 10.5px; }
+
+    /* Tutorial em portrait */
+    .tutorial-overlay { padding: 12px; }
+    .tutorial-card {
+        padding: 22px 18px;
+        max-height: 92vh;
+        overflow-y: auto;
+    }
+    .tutorial-card h2 { font-size: 22px; }
+    .tutorial-steps { gap: 12px; }
+    .tutorial-steps li {
+        font-size: 12.5px;
+        padding-left: 38px;
+        line-height: 1.45;
+    }
+    .tutorial-steps li::before {
+        width: 28px; height: 28px;
+        font-size: 13px;
+    }
+    .tutorial-ok { padding: 14px; font-size: 14px; }
+
+    /* Trofeus em portrait */
+    .trophies-grid { grid-template-columns: 1fr 1fr; gap: 8px; }
+    .trophy-card { padding: 11px 8px; }
+    .trophy-icon { font-size: 26px; }
+    .trophy-label { font-size: 9px; }
+    .trophy-value { font-size: 13.5px; }
+
+    /* Toasts em mobile */
+    .achievement-toast {
+        right: 10px;
+        left: 10px;
+        min-width: 0;
+        max-width: calc(100vw - 20px);
+    }
+    .new-species-toast {
+        max-width: calc(100vw - 24px);
+    }
+    .event-toast {
+        max-width: calc(100vw - 24px);
+    }
+    .offline-toast {
+        max-width: calc(100vw - 16px);
+        min-width: 0;
+        left: 50%;
+        right: auto;
+    }
+    .save-toast { font-size: 12px; padding: 9px 16px; }
+
+    /* Joystick não fica preso atrás do painel */
+    .ocean-panel { overflow: hidden; }
+
+    /* Footer */
+    .app-footer { padding-top: 8px; }
+    .version-tag { font-size: 9.5px; }
+}
+
+/* Telas extra-pequenas (Galaxy Fold dobrado, etc.) */
+@media (max-width: 360px) {
+    .panel-tab { font-size: 9.5px; padding: 10px 3px; }
+    .compendium-grid { grid-template-columns: repeat(3, 1fr); }
+    .stats { grid-template-columns: 1fr 1fr 1fr; }
+    .stat-value { font-size: 12px; }
+    .cast-button { min-width: 170px; padding: 11px 18px; font-size: 12px; }
+    .zone-card-preview { display: none; }
 }

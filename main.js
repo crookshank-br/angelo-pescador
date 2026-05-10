@@ -2755,6 +2755,8 @@ function setupInput() {
         if (e.code === 'KeyP') {
             rt.paused = !rt.paused;
             SFX.pause(rt.paused);
+            const btn = document.getElementById('floatingPauseBtn');
+            if (btn) btn.textContent = rt.paused ? '▶' : '⏸';
         }
     });
     document.addEventListener('keyup', (e) => {
@@ -2795,6 +2797,13 @@ function init() {
         b.addEventListener('click', () => buyPearlBonus(b.dataset.bonus));
     });
     document.getElementById('openTrophiesBtn')?.addEventListener('click', openTrophiesModal);
+    // Botão flutuante de pausa (substitui tecla P em mobile)
+    document.getElementById('floatingPauseBtn')?.addEventListener('click', () => {
+        rt.paused = !rt.paused;
+        SFX.pause(rt.paused);
+        const btn = document.getElementById('floatingPauseBtn');
+        if (btn) btn.textContent = rt.paused ? '▶' : '⏸';
+    });
     document.getElementById('closeTrophiesBtn')?.addEventListener('click', () => {
         document.getElementById('trophiesModal').classList.remove('show');
     });
