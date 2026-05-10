@@ -73,7 +73,7 @@ const FISH = [
 const UPGRADES = [
     {
         id: 'rod', name: 'Vara Reforçada', icon: '🎣',
-        desc: '+0.15s de duração por sessão de pesca',
+        desc: '+0.25s de duração por sessão de pesca',
         baseCost: 20, costMultiplier: 1.22, maxLevel: 20,
     },
     {
@@ -362,7 +362,7 @@ const rt = {
 // HELPERS DE ECONOMIA
 // =================================================================
 function calcCost(up, lvl) { return Math.floor(up.baseCost * Math.pow(up.costMultiplier, lvl)); }
-function getSessionDuration() { return SESSION_BASE_MS + state.upgrades.rod * 150; }
+function getSessionDuration() { return SESSION_BASE_MS + state.upgrades.rod * 250; }
 function getSpawnInterval()  {
     const reduction = Math.pow(0.97, state.upgrades.bait);
     return Math.max(500, SPAWN_BASE_MS * reduction);
