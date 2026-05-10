@@ -11,7 +11,7 @@
 // CONSTANTES
 // =================================================================
 const SAVE_KEY            = 'angeloPescadorSave_v4';
-const SESSION_BASE_MS     = 6000;
+const SESSION_BASE_MS     = 8000;
 const SPAWN_BASE_MS       = 1800;
 const HOOK_BASE_RADIUS    = 30;       // px
 const HOOK_SPEED          = 0.035;    // % por ms (mais lento, exige pontaria)
@@ -79,7 +79,7 @@ const UPGRADES = [
         baseCost: 20, costMultiplier: 1.22, maxLevel: 20,
     },
     {
-        id: 'bait', name: 'Isca Especial', icon: '🪱',
+        id: 'bait', name: 'Isca Especial', icon: '🐛',
         desc: 'Peixes aparecem mais rápido e raros mais frequentes',
         baseCost: 120, costMultiplier: 1.25, maxLevel: 20,
     },
@@ -89,7 +89,7 @@ const UPGRADES = [
         baseCost: 500, costMultiplier: 1.38, maxLevel: 12,
     },
     {
-        id: 'hook', name: 'Anzol Largo', icon: '🪝',
+        id: 'hook', name: 'Anzol Largo', icon: '⚓',
         desc: '+8% área de captura · +3% chance de multi-captura',
         baseCost: 800, costMultiplier: 1.28, maxLevel: 15,
     },
@@ -184,6 +184,14 @@ const SFX = (() => {
         },
         pause(on) {
             tone(on ? 220 : 330, 'sine', 0.1, 0.12);
+        },
+        tab() {
+            tone(880, 'sine', 0.04, 0.06);
+        },
+        offline() {
+            tone(523, 'sine', 0.1, 0.18);
+            delay(() => tone(659, 'sine', 0.12, 0.18), 100);
+            delay(() => tone(784, 'sine', 0.18, 0.22), 200);
         },
     };
 })();
@@ -454,7 +462,11 @@ function sellFish(f) {
     // Atualiza progresso de missões
     questProgress('catch_any', 1);
     questProgress('catch_' + f.rarity, 1);
+    if (f.rarity === 'rare' || f.rarity === 'epic' || f.rarity === 'legendary') {
+        questProgress('catch_rare', 1);
+    }
     if (f.zones.includes(3)) questProgress('catch_abyss', 1);
+    questProgress('earn', v);
     // Tracking de espécies e lendários
     if (!state._speciesCaught) state._speciesCaught = {};
     const isNew = !state._speciesCaught[f.name];   // verificar ANTES de setar
@@ -1428,6 +1440,7 @@ function drawSeaweed(t) {
     const wy = waterY();
     const wh = waterHeight();
     const bottom = wy + wh;
+    const z = state.currentZone;
     for (const alga of rt.seaweed) {
         const segH = alga.h / alga.segs;
         ctx.save();
@@ -1436,8 +1449,11 @@ function drawSeaweed(t) {
             ctx.shadowColor = `hsla(${alga.hue}, 80%, 65%, ${glow})`;
             ctx.shadowBlur = 8;
             ctx.strokeStyle = `hsla(${alga.hue}, 70%, ${30 + Math.sin(alga.phase) * 10}%, 0.8)`;
+        } else if (z === 1) {
+            // Arrecifes: corais coloridos visíveis (lightness alto)
+            ctx.strokeStyle = `hsla(${alga.hue}, ${65 + Math.sin(alga.phase) * 10}%, ${42 + Math.sin(alga.phase * 0.7) * 8}%, 0.85)`;
         } else {
-            ctx.strokeStyle = `hsla(${alga.hue}, ${45 + Math.sin(alga.phase) * 15}%, ${18 + Math.sin(alga.phase * 0.7) * 8}%, 0.7)`;
+            ctx.strokeStyle = `hsla(${alga.hue}, ${45 + Math.sin(alga.phase) * 15}%, ${28 + Math.sin(alga.phase * 0.7) * 8}%, 0.75)`;
         }
         ctx.lineWidth = alga.thick;
         ctx.lineCap = 'round';
@@ -1626,8 +1642,10 @@ function startFishing() {
     rt.hookX = 50;
     rt.hookY = 0;
     rt.hookDescending = true;
+    DOM.castButton.classList.remove('cooldown');   // garante limpeza
     DOM.castButton.classList.add('fishing');
-    addLog('🎣 Anzol lançado! Use WASD para mover.');
+    DOM.castProgress.style.width = '0%';
+    addLogOnce('🎣 Anzol lançado! Use WASD para mover.');
     // Splash inicial na superfície
     emitSplash(cw * 0.5, waterY() + 4);
     SFX.splash();
@@ -1970,6 +1988,22 @@ function addLog(text) {
     while (log.children.length > 25) log.lastChild.remove();
 }
 
+// Suprime mensagens duplicadas em sequência (ex: "Anzol lançado!" várias vezes)
+let _lastLogText = '';
+let _lastLogCount = 0;
+function addLogOnce(text) {
+    const log = DOM.fishingLog || document.getElementById('fishingLog');
+    if (!log) return;
+    if (text === _lastLogText && log.firstChild) {
+        _lastLogCount++;
+        log.firstChild.textContent = `${text} (×${_lastLogCount + 1})`;
+        return;
+    }
+    _lastLogText = text;
+    _lastLogCount = 0;
+    addLog(text);
+}
+
 function updateStats() {
     if (!DOM.money) return;
     const newMoney = fmtMoney(state.money);
@@ -1984,11 +2018,15 @@ function updateStats() {
 
     // Pesca passiva no melhor zona desbloqueada para cálculo de lucro
     const rate = getPassiveRate();
-    const bestZone = bestUnlockedZone();
-    const pool = FISH.filter(f => f.zones.includes(bestZone));
-    const tw = pool.reduce((s, f) => s + f.weight, 0);
-    const avg = pool.reduce((s, f) => s + f.baseValue * f.weight, 0) / (tw || 1);
-    DOM.passiveIncome.textContent = fmtMoney(rate * avg * getValueMultiplier() * getPearlValueMult());
+    if (rate > 0) {
+        const bestZone = bestUnlockedZone();
+        const pool = FISH.filter(f => f.zones.includes(bestZone));
+        const tw = pool.reduce((s, f) => s + f.weight, 0);
+        const avg = pool.reduce((s, f) => s + f.baseValue * f.weight, 0) / (tw || 1);
+        DOM.passiveIncome.textContent = fmtMoney(rate * avg * getValueMultiplier() * getPearlValueMult());
+    } else {
+        DOM.passiveIncome.textContent = '— rede';
+    }
     DOM.currentZone.textContent = ZONES[state.currentZone].name;
     DOM.currentDepth.textContent = ZONES[state.currentZone].maxDepth;
 }
@@ -2146,7 +2184,7 @@ function updateCompendium() {
 // LOJA DE CONSUMÍVEIS
 // =================================================================
 const CONSUMABLES = [
-    { id: 'extraBait',   name: 'Isca Extra',   icon: '🪱', cost: 500,   desc: '2× spawn' },
+    { id: 'extraBait',   name: 'Isca Extra',   icon: '🐛', cost: 500,   desc: '2× spawn' },
     { id: 'magnify',     name: 'Lupa',         icon: '🔍', cost: 1500,  desc: 'Só raros' },
     { id: 'chronometer', name: 'Cronômetro',   icon: '⏱️', cost: 3000,  desc: '+50% tempo' },
 ];
@@ -2294,11 +2332,13 @@ function eventFiltersFish(fish) {
 // MISSÕES DIÁRIAS
 // =================================================================
 const QUEST_POOL = [
-    { id: 'catch_any',    desc: peixes => `Capture ${peixes} peixes`,         goals: [10, 25, 50],    track: 'catch_any',       reward: lvl => 200 * (lvl + 1) * (lvl + 1) },
-    { id: 'catch_rare',   desc: n => `Capture ${n} peixes raros+`,            goals: [3, 8, 15],      track: 'catch_rare',      reward: lvl => 1500 * (lvl + 1) },
-    { id: 'catch_epic',   desc: n => `Capture ${n} peixes épicos`,            goals: [1, 3, 6],       track: 'catch_epic',      reward: lvl => 4000 * (lvl + 1) },
-    { id: 'catch_abyss',  desc: n => `Capture ${n} peixes da Fossa Abissal`,  goals: [3, 8, 15],      track: 'catch_abyss',     reward: lvl => 8000 * (lvl + 1) },
-    { id: 'catch_legend', desc: n => `Capture ${n} peixes lendários`,         goals: [1, 2, 3],       track: 'catch_legendary', reward: lvl => 50000 * (lvl + 1) },
+    { id: 'catch_any',    desc: n => `Capture ${n} ${n === 1 ? 'peixe' : 'peixes'}`,                          goals: [10, 25, 50], track: 'catch_any',       reward: lvl => 200 * (lvl + 1) * (lvl + 1), minMotor: 0  },
+    { id: 'catch_uncommon', desc: n => `Capture ${n} ${n === 1 ? 'peixe incomum' : 'peixes incomuns'}`,        goals: [5, 12, 25],  track: 'catch_uncommon',  reward: lvl => 500 * (lvl + 1),             minMotor: 0  },
+    { id: 'catch_rare',   desc: n => `Capture ${n} ${n === 1 ? 'peixe raro+' : 'peixes raros+'}`,             goals: [3, 8, 15],   track: 'catch_rare',      reward: lvl => 1500 * (lvl + 1),            minMotor: 3  },
+    { id: 'catch_epic',   desc: n => `Capture ${n} ${n === 1 ? 'peixe épico' : 'peixes épicos'}`,             goals: [1, 3, 6],    track: 'catch_epic',      reward: lvl => 4000 * (lvl + 1),            minMotor: 7  },
+    { id: 'catch_abyss',  desc: n => `Capture ${n} ${n === 1 ? 'peixe da Fossa' : 'peixes da Fossa Abissal'}`, goals: [3, 8, 15], track: 'catch_abyss',     reward: lvl => 8000 * (lvl + 1),            minMotor: 12 },
+    { id: 'catch_legend', desc: n => `Capture ${n} ${n === 1 ? 'peixe lendário' : 'peixes lendários'}`,       goals: [1, 2, 3],    track: 'catch_legendary', reward: lvl => 50000 * (lvl + 1),           minMotor: 12 },
+    { id: 'earn',         desc: n => `Ganhe ${fmtMoney(n)}`,                                                  goals: [500, 2500, 10000], track: 'earn',     reward: lvl => 300 * (lvl + 1) * (lvl + 1), minMotor: 0  },
 ];
 
 function todayKey() {
@@ -2309,13 +2349,17 @@ function todayKey() {
 function ensureQuestsForToday() {
     if (!state.quests) state.quests = { date: '', list: [] };
     if (state.quests.date === todayKey() && state.quests.list.length) return;
-    // Sorteia 3 missões
-    const pool = [...QUEST_POOL];
+    // Filtra missões pelas zonas acessíveis (motor atual)
+    const motorLvl = state.upgrades?.motor || 0;
+    const reachable = QUEST_POOL.filter(q => q.minMotor <= motorLvl);
+    const pool = reachable.length >= 3 ? [...reachable] : [...QUEST_POOL.filter(q => q.minMotor === 0)];
     const list = [];
     for (let i = 0; i < 3 && pool.length; i++) {
         const idx = Math.floor(Math.random() * pool.length);
         const q = pool.splice(idx, 1)[0];
-        const lvl = Math.floor(Math.random() * 3); // 0, 1 ou 2
+        // Nível de dificuldade: limita pelo nível do motor (mais fácil pra novato)
+        const maxLvl = motorLvl >= 7 ? 2 : motorLvl >= 3 ? 1 : 0;
+        const lvl = Math.floor(Math.random() * (maxLvl + 1));
         list.push({
             id: q.id, track: q.track,
             goal: q.goals[lvl], progress: 0,
@@ -2414,6 +2458,8 @@ function doPrestige() {
 }
 function buyPearlBonus(type) {
     if (state.pearls <= 0) return;
+    const labels = { value: 'Mercado das Pérolas', spawn: 'Cardume Permanente' };
+    if (!confirm(`Gastar 1 Pérola para subir "${labels[type] || type}"? Pérolas são permanentes mas escassas.`)) return;
     state.pearls -= 1;
     state.pearlBonuses[type] = (state.pearlBonuses[type] || 0) + 1;
     SFX.upgrade();
@@ -2676,6 +2722,8 @@ function switchTab(tabId) {
     document.querySelectorAll('.tab-pane').forEach(p => {
         p.classList.toggle('active', p.dataset.pane === tabId);
     });
+    // Som leve ao trocar de aba
+    if (typeof SFX !== 'undefined' && SFX.tab) SFX.tab();
 }
 
 function notifyTab(tabId) {
@@ -2789,15 +2837,70 @@ function init() {
     addLog('🎣 Bem-vindo! Pressione ESPAÇO ou clique em LANÇAR ANZOL.');
     addLog('🎮 WASD/setas · P pausar · Ctrl+S salvar');
 
-    // Tutorial na primeira vez
-    if (isFirstTime && !localStorage.getItem('angeloPescadorTutorialDone')) {
+    // Tutorial: aparece se nunca foi visto, independente do save existir ou não
+    if (!localStorage.getItem('angeloPescadorTutorialDone')) {
         document.getElementById('tutorialOverlay')?.classList.add('show');
     }
 
     // Som ambiente
     setupAmbientSound();
 
+    // Offline earnings: enquanto a aba estiver oculta, calcula peixes pescados pela rede
+    setupOfflineEarnings();
+
     requestAnimationFrame(gameLoop);
+}
+
+// =================================================================
+// OFFLINE EARNINGS — calcula ganhos da rede enquanto aba estava oculta
+// =================================================================
+function setupOfflineEarnings() {
+    let hiddenAt = 0;
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            hiddenAt = Date.now();
+            saveGame();
+        } else if (hiddenAt > 0) {
+            const elapsedSec = (Date.now() - hiddenAt) / 1000;
+            hiddenAt = 0;
+            // Apenas se passou >30s e tem rede
+            const rate = getPassiveRate();
+            if (elapsedSec < 30 || rate <= 0) return;
+            const minutes = elapsedSec / 60;
+            const fishesToCatch = Math.floor(rate * minutes);
+            if (fishesToCatch <= 0) return;
+            // Cap: máximo 8h de offline
+            const cappedFishes = Math.min(fishesToCatch, Math.floor(rate * 60 * 8));
+            let totalGain = 0;
+            for (let i = 0; i < cappedFishes; i++) {
+                const f = rollFish(bestUnlockedZone());
+                if (f) totalGain += sellFish(f);
+            }
+            if (totalGain > 0) {
+                showOfflineEarningsToast(cappedFishes, totalGain, elapsedSec);
+                SFX.offline();
+                updateStats();
+                saveGame();
+            }
+        }
+    });
+}
+
+function showOfflineEarningsToast(fishes, gain, elapsedSec) {
+    const mins = Math.round(elapsedSec / 60);
+    const t = document.createElement('div');
+    t.className = 'offline-toast';
+    t.innerHTML = `
+        <span class="offline-emoji">🕸️</span>
+        <div>
+            <strong>Pesca Offline!</strong>
+            <span>Sua rede pescou <b>${fishes}</b> peixes em ${mins < 1 ? '<1' : mins} min · +${fmtMoney(gain)}</span>
+        </div>
+        <button class="offline-close" aria-label="Fechar">×</button>
+    `;
+    document.body.appendChild(t);
+    t.querySelector('.offline-close').addEventListener('click', () => t.remove());
+    setTimeout(() => t.remove(), 8000);
 }
 
 // =================================================================
