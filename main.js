@@ -70,38 +70,56 @@ const FISH = [
 ];
 
 // =================================================================
-// MELHORIAS — economia rebalanceada (curvas mais íngremes)
+// MELHORIAS
+// Progressão alvo ~1h: Costa(0-8min) → Arrecifes(8-20) →
+//   Mar Aberto(20-35) → Fossa(35-55) → Prestígio(55-60)
+// Motor  mais barato: Arrecifes $950 · Mar $6.4k · Fossa $51.5k
+// Hook/Net/Value mais caros para encher ~20min na Fossa
+// Batiscafo: exclusivo Motor 12, total ~$1.5M
 // =================================================================
 const UPGRADES = [
     {
         id: 'rod', name: 'Vara Reforçada', icon: '🎣',
         desc: '+0.25s de duração por sessão de pesca',
         baseCost: 20, costMultiplier: 1.22, maxLevel: 20,
+        // total ~$2.7k — maxado ainda na Costa Rasa
     },
     {
         id: 'bait', name: 'Isca Especial', icon: '🐛',
         desc: 'Peixes aparecem mais rápido e raros mais frequentes',
         baseCost: 120, costMultiplier: 1.25, maxLevel: 20,
+        // total ~$20k — maxado até o Mar Aberto
     },
     {
         id: 'motor', name: 'Motor do Barco', icon: '⚙️',
         desc: 'Desbloqueia águas mais profundas',
-        baseCost: 1000, costMultiplier: 1.38, maxLevel: 12,
+        baseCost: 200, costMultiplier: 1.50, maxLevel: 12,
+        // era 1000/1.38 → Arrecifes $950 · Mar $6.4k · Fossa $51.5k
     },
     {
         id: 'hook', name: 'Anzol Largo', icon: '⚓',
         desc: '+8% área de captura · +3% chance de multi-captura',
-        baseCost: 800, costMultiplier: 1.28, maxLevel: 15,
+        baseCost: 1200, costMultiplier: 1.26, maxLevel: 18,
+        // era 800/1.28/15 → total ~$290k (últimos níveis na Fossa)
     },
     {
         id: 'net', name: 'Rede de Pesca', icon: '🕸️',
         desc: 'Pesca passiva: 0.15 peixe/min por nível',
-        baseCost: 1500, costMultiplier: 1.30, maxLevel: 25,
+        baseCost: 2500, costMultiplier: 1.28, maxLevel: 25,
+        // era 1500/1.30/25 → total ~$4.4M (principal sink da Fossa)
     },
     {
         id: 'value', name: 'Mercado Premium', icon: '💰',
         desc: '+4% no valor de venda dos peixes',
-        baseCost: 2500, costMultiplier: 1.30, maxLevel: 20,
+        baseCost: 3000, costMultiplier: 1.28, maxLevel: 22,
+        // era 2500/1.30/20 → total ~$2.5M
+    },
+    {
+        id: 'abyss', name: 'Batiscafo Abissal', icon: '🔭',
+        desc: '+10% no valor de todos os peixes por nível',
+        baseCost: 30000, costMultiplier: 1.50, maxLevel: 8,
+        requiredMotor: 12,
+        // exclusivo da Fossa · total ~$1.5M · último nível $512k
     },
 ];
 
@@ -330,7 +348,7 @@ const FISH_COLORS = [
 // =================================================================
 let state = {
     money: 0, totalFish: 0, currentZone: 0,
-    upgrades: { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0 },
+    upgrades: { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0, abyss: 0 },
     lastSave: Date.now(),
     achievements: {},
     _speciesCaught: {},
@@ -410,7 +428,11 @@ function getMultiCatchChance() {
 }
 function getMaxExtras()        { return 1 + Math.floor(state.upgrades.hook / 8); }
 function getBaitRarityBonus()  { return Math.min(0.35, state.upgrades.bait * 0.025); }
-function getValueMultiplier()  { return (1 + state.upgrades.value * 0.04) * getPearlValueMult(); }
+function getValueMultiplier()  {
+    return (1 + state.upgrades.value * 0.04)
+         * (1 + (state.upgrades.abyss || 0) * 0.10)
+         * getPearlValueMult();
+}
 function getPassiveRate()      { return state.upgrades.net * 0.15 * (1 + (state.pearlBonuses?.spawn || 0) * 0.05); }
 function isZoneUnlocked(id)    { return state.upgrades.motor >= ZONES[id].requiredMotor; }
 
@@ -1569,8 +1591,10 @@ function updateChests(delta) {
             const dx = hp.x - c.x;
             const dy = hp.y - c.y;
             if (dx * dx + dy * dy < 900) {
-                const zoneChestMult = [1, 8, 50, 300][state.currentZone] ?? 1;
-                const valor = Math.floor((75 + Math.random() * 175) * zoneChestMult * (1 + state.upgrades.bait * 0.05));
+                // Baú = jackpot ~10× média de um peixe na zona
+                // Zona 0: $30-150 · Zona 1: $480-2400 · Zona 2: $4.8k-24k · Zona 3: $75k-375k
+                const zoneChestMult = [1, 16, 160, 2500][state.currentZone] ?? 1;
+                const valor = Math.floor((30 + Math.random() * 120) * zoneChestMult * (1 + state.upgrades.bait * 0.05));
                 state.money += valor;
                 emitSparkles(c.x, c.y, '#ffd700', 25);
                 rt.cameraShake = 5;
@@ -1861,12 +1885,18 @@ function updateUpgradeCards() {
         if (!r) return;
         const lvl = state.upgrades[up.id] ?? 0;
         const maxed = lvl >= up.maxLevel;
+        const locked = up.requiredMotor && state.upgrades.motor < up.requiredMotor;
         const cost = calcCost(up, lvl);
         const can = state.money >= cost;
         r.level.textContent = `Lv ${lvl}${maxed ? ' MAX' : ''}`;
-        r.cost.textContent  = maxed ? '—' : fmtMoney(cost);
-        r.costLabel.textContent = maxed ? 'MÁXIMO' : 'COMPRAR';
-        const shouldDisable = !can || maxed;
+        if (locked) {
+            r.cost.textContent = '—';
+            r.costLabel.textContent = `🔒 Motor ${up.requiredMotor}`;
+        } else {
+            r.cost.textContent  = maxed ? '—' : fmtMoney(cost);
+            r.costLabel.textContent = maxed ? 'MÁXIMO' : 'COMPRAR';
+        }
+        const shouldDisable = locked || !can || maxed;
         if (r.btn.disabled !== shouldDisable) r.btn.disabled = shouldDisable;
     });
 }
@@ -1928,6 +1958,7 @@ function buyUpgrade(id) {
     if (!up) return;
     const lvl = state.upgrades[id] ?? 0;
     if (lvl >= up.maxLevel) return;
+    if (up.requiredMotor && state.upgrades.motor < up.requiredMotor) return;
     const cost = calcCost(up, lvl);
     if (state.money < cost) return;
     state.money -= cost;
@@ -2186,17 +2217,17 @@ function updateCompendium() {
 // =================================================================
 const CONSUMABLES = [
     {
-        id: 'extraBait', name: 'Isca Extra', icon: '🐛', cost: 500,
+        id: 'extraBait', name: 'Isca Extra', icon: '🐛', cost: 800,
         short: 'Spawn 2× rápido',
         desc: 'Peixes aparecem 2× mais rápido durante a próxima sessão de pesca.',
     },
     {
-        id: 'magnify', name: 'Lupa', icon: '🔍', cost: 1500,
+        id: 'magnify', name: 'Lupa', icon: '🔍', cost: 4000,
         short: 'Sem peixes comuns',
         desc: 'Na próxima sessão, peixes comuns são bloqueados — só aparecem incomuns, raros, épicos e lendários.',
     },
     {
-        id: 'chronometer', name: 'Cronômetro', icon: '⏱️', cost: 3000,
+        id: 'chronometer', name: 'Cronômetro', icon: '⏱️', cost: 10000,
         short: 'Sessão +50% longa',
         desc: 'A próxima sessão de pesca dura 50% mais tempo, dando mais oportunidades de captura.',
     },
@@ -2462,7 +2493,7 @@ function doPrestige() {
     state.pearls += gain;
     state.money = 0;
     state.totalFish = 0;
-    state.upgrades = { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0 };
+    state.upgrades = { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0, abyss: 0 };
     state.currentZone = 0;
     state._biggestCatch = null;
     state._maxCombo = 0;
