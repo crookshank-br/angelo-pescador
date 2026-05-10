@@ -620,6 +620,107 @@ button { font-family: inherit; }
     font-weight: 600;
 }
 
+/* ============================================
+   COMPÊNDIO DE ESPÉCIES
+   ============================================ */
+
+.compendium-section h3 {
+    font-size: 11px;
+    letter-spacing: 2.2px;
+    color: var(--cyan-accent);
+    margin-bottom: 10px;
+    text-transform: uppercase;
+    border-bottom: 1px solid var(--panel-border);
+    padding-bottom: 6px;
+    font-weight: 600;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.comp-counter {
+    font-size: 10px;
+    letter-spacing: 0.5px;
+    color: var(--gold);
+    font-family: var(--font-mono);
+    opacity: 0.9;
+}
+
+.compendium-grid {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 5px;
+    max-height: 200px;
+    overflow-y: auto;
+    padding-right: 2px;
+}
+
+.compendium-grid::-webkit-scrollbar { width: 4px; }
+.compendium-grid::-webkit-scrollbar-thumb { background: var(--cyan-accent); border-radius: 2px; }
+
+.comp-cell {
+    position: relative;
+    background: rgba(2, 8, 20, 0.6);
+    border: 1px solid rgba(0, 212, 255, 0.1);
+    border-radius: 7px;
+    padding: 5px 3px 4px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    cursor: default;
+    transition: border-color var(--trans-fast), background var(--trans-fast);
+    overflow: hidden;
+}
+
+.comp-cell:hover {
+    border-color: rgba(0, 212, 255, 0.4);
+    background: rgba(10, 61, 98, 0.5);
+    z-index: 1;
+    transform: scale(1.08);
+}
+
+.comp-cell.comp-caught {
+    border-color: rgba(0, 212, 255, 0.25);
+    background: rgba(10, 40, 70, 0.55);
+}
+
+.comp-emoji {
+    font-size: 20px;
+    line-height: 1;
+    filter: drop-shadow(0 1px 3px rgba(0,0,0,0.5));
+}
+
+.comp-name {
+    font-size: 7.5px;
+    text-align: center;
+    opacity: 0.75;
+    line-height: 1.2;
+    word-break: break-word;
+    hyphens: auto;
+    max-width: 100%;
+}
+
+.comp-value {
+    font-size: 7px;
+    color: var(--gold);
+    font-family: var(--font-mono);
+    opacity: 0.8;
+}
+
+.comp-rarity {
+    position: absolute;
+    top: 3px; right: 3px;
+    width: 5px; height: 5px;
+    border-radius: 50%;
+}
+
+.comp-rarity-common    { background: rgba(200, 200, 200, 0.5); }
+.comp-rarity-uncommon  { background: rgba(173, 216, 230, 0.8); }
+.comp-rarity-rare      { background: var(--cyan-glow); }
+.comp-rarity-epic      { background: var(--epic); box-shadow: 0 0 4px var(--epic); }
+.comp-rarity-legendary { background: var(--legendary); box-shadow: 0 0 6px var(--legendary); }
+
 /* Log */
 .log-panel {
     background: rgba(2, 8, 20, 0.4);
@@ -706,6 +807,52 @@ button { font-family: inherit; }
     0%        { opacity: 0; transform: translate(-50%, 24px); }
     15%, 80%  { opacity: 1; transform: translate(-50%, 0); }
     100%      { opacity: 0; transform: translate(-50%, -8px); }
+}
+
+/* Achievement toast */
+.achievement-toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: linear-gradient(135deg, #1a1a2e, #2a1a4e);
+    border: 2px solid var(--legendary);
+    color: var(--white);
+    padding: 14px 20px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    box-shadow: 0 8px 32px rgba(255, 179, 71, 0.55), 0 2px 8px rgba(0, 0, 0, 0.6);
+    animation: achEnter 400ms cubic-bezier(0.34, 1.56, 0.64, 1), achExit 500ms ease 3400ms forwards;
+    z-index: 200;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    min-width: 260px;
+}
+.achievement-toast .ach-icon {
+    font-size: 28px;
+    filter: drop-shadow(0 2px 6px rgba(255, 179, 71, 0.6));
+}
+.achievement-toast div {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+.achievement-toast strong {
+    color: var(--legendary);
+    font-size: 13px;
+}
+.achievement-toast span {
+    opacity: 0.8;
+    font-size: 11px;
+}
+@keyframes achEnter {
+    from { opacity: 0; transform: translateX(80px) scale(0.8); }
+    to   { opacity: 1; transform: translateX(0) scale(1); }
+}
+@keyframes achExit {
+    from { opacity: 1; transform: translateX(0) scale(1); }
+    to   { opacity: 0; transform: translateX(60px) scale(0.95); }
 }
 
 @media (max-width: 900px) {

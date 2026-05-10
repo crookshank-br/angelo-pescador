@@ -62,9 +62,9 @@ const FISH = [
     { name: 'Peixe-Lanterna',    emoji: '🐟', baseValue: 9000,   rarity: 'rare',      zones: [3],       weight: 22,  speed: 1.0, size: 36 },
     { name: 'Lula Colossal',     emoji: '🦑', baseValue: 22000,  rarity: 'epic',      zones: [3],       weight: 9,   speed: 1.0, size: 58 },
     { name: 'Kraken',            emoji: '🐙', baseValue: 45000,  rarity: 'epic',      zones: [3],       weight: 5,   speed: 0.8, size: 64 },
-    { name: 'Peixe-Dragão',      emoji: '🐉', baseValue: 75000,  rarity: 'legendary', zones: [3],       weight: 2.5, speed: 1.6, size: 66 },
-    { name: 'Tubarão-Fantasma',  emoji: '🦈', baseValue: 130000, rarity: 'legendary', zones: [3],       weight: 1.2, speed: 2.0, size: 72 },
-    { name: 'Baleia Azul',       emoji: '🐋', baseValue: 320000, rarity: 'legendary', zones: [3],       weight: 0.3, speed: 0.7, size: 92 },
+    { name: 'Peixe-Dragão',      emoji: '🐉', baseValue: 75000,  rarity: 'legendary', zones: [3],       weight: 2.5, speed: 1.6, size: 66, bossHp: 2 },
+    { name: 'Tubarão-Fantasma',  emoji: '🦈', baseValue: 130000, rarity: 'legendary', zones: [3],       weight: 1.2, speed: 2.0, size: 72, bossHp: 3 },
+    { name: 'Baleia Azul',       emoji: '🐋', baseValue: 320000, rarity: 'legendary', zones: [3],       weight: 0.3, speed: 0.7, size: 92, bossHp: 4 },
 ];
 
 // =================================================================
@@ -102,6 +102,174 @@ const UPGRADES = [
         baseCost: 2500, costMultiplier: 1.30, maxLevel: 20,
     },
 ];
+
+// =================================================================
+// SONS — Web Audio API sintético (zero dependências)
+// =================================================================
+const SFX = (() => {
+    let ac = null;
+    function ctx() {
+        if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
+        if (ac.state === 'suspended') ac.resume();
+        return ac;
+    }
+    function tone(freq, type, dur, vol = 0.28, startDetune = 0, endDetune = 0) {
+        try {
+            const c = ctx();
+            const osc = c.createOscillator();
+            const gain = c.createGain();
+            osc.connect(gain); gain.connect(c.destination);
+            osc.type = type;
+            osc.frequency.setValueAtTime(freq, c.currentTime);
+            osc.detune.setValueAtTime(startDetune, c.currentTime);
+            osc.detune.linearRampToValueAtTime(endDetune, c.currentTime + dur);
+            gain.gain.setValueAtTime(vol, c.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + dur);
+            osc.start(c.currentTime); osc.stop(c.currentTime + dur);
+        } catch (e) {}
+    }
+    function delay(fn, ms) { setTimeout(fn, ms); }
+    return {
+        splash() {
+            tone(200, 'sine', 0.25, 0.12, 0, -400);
+            tone(110, 'sine', 0.35, 0.08, 0, -200);
+        },
+        catch(rarity) {
+            if (rarity === 'legendary') {
+                tone(523, 'sine', 0.12, 0.35);
+                delay(() => tone(659, 'sine', 0.12, 0.35), 130);
+                delay(() => tone(784, 'sine', 0.15, 0.4), 260);
+                delay(() => tone(1047, 'sine', 0.5, 0.45), 400);
+                delay(() => tone(1318, 'sine', 0.4, 0.4), 600);
+            } else if (rarity === 'epic') {
+                tone(392, 'sine', 0.1, 0.28);
+                delay(() => tone(523, 'sine', 0.12, 0.28), 110);
+                delay(() => tone(659, 'sine', 0.3, 0.32), 220);
+            } else if (rarity === 'rare') {
+                tone(330, 'triangle', 0.1, 0.22);
+                delay(() => tone(440, 'triangle', 0.22, 0.22), 90);
+            } else if (rarity === 'uncommon') {
+                tone(277, 'triangle', 0.12, 0.18);
+                delay(() => tone(349, 'triangle', 0.15, 0.18), 80);
+            } else {
+                tone(220, 'triangle', 0.12, 0.15, 0, 100);
+            }
+        },
+        upgrade() {
+            tone(440, 'sine', 0.08, 0.18);
+            delay(() => tone(554, 'sine', 0.08, 0.18), 70);
+            delay(() => tone(659, 'sine', 0.18, 0.22), 140);
+            delay(() => tone(880, 'sine', 0.12, 0.18), 260);
+        },
+        chest() {
+            tone(660, 'sine', 0.08, 0.28);
+            delay(() => tone(880, 'sine', 0.08, 0.28), 90);
+            delay(() => tone(1046, 'sine', 0.22, 0.32), 180);
+        },
+        combo(n) {
+            const freqs = [330, 392, 440, 494, 554, 622, 698, 784];
+            const f = freqs[Math.min(n - 2, freqs.length - 1)];
+            tone(f, 'sine', 0.18, 0.2 + Math.min(n * 0.025, 0.15));
+        },
+        boss() {
+            tone(150, 'sawtooth', 0.3, 0.3, 0, -300);
+            tone(75,  'square',   0.4, 0.18);
+        },
+        zone() {
+            tone(196, 'sine', 0.15, 0.12, 0, 200);
+            delay(() => tone(247, 'sine', 0.15, 0.12, 0, 200), 120);
+            delay(() => tone(294, 'sine', 0.25, 0.15, 0, 200), 240);
+        },
+        pause(on) {
+            tone(on ? 220 : 330, 'sine', 0.1, 0.12);
+        },
+    };
+})();
+
+// =================================================================
+// TOUCH — joystick virtual para mobile
+// =================================================================
+const touchState = {
+    active: false,
+    startX: 0, startY: 0,
+    currentX: 0, currentY: 0,
+    radius: 60,
+};
+
+function setupTouch() {
+    const cv = document.getElementById('gameCanvas');
+    cv.addEventListener('touchstart', (e) => {
+        e.preventDefault();
+        const t = e.touches[0];
+        const r = cv.getBoundingClientRect();
+        const scaleX = cw / r.width;
+        const scaleY = ch / r.height;
+        touchState.active = true;
+        touchState.startX   = (t.clientX - r.left) * scaleX;
+        touchState.startY   = (t.clientY - r.top)  * scaleY;
+        touchState.currentX = touchState.startX;
+        touchState.currentY = touchState.startY;
+        if (!rt.fishingActive) startFishing();
+    }, { passive: false });
+
+    cv.addEventListener('touchmove', (e) => {
+        e.preventDefault();
+        const t = e.touches[0];
+        const r = cv.getBoundingClientRect();
+        const scaleX = cw / r.width;
+        const scaleY = ch / r.height;
+        touchState.currentX = (t.clientX - r.left) * scaleX;
+        touchState.currentY = (t.clientY - r.top)  * scaleY;
+        const dx = touchState.currentX - touchState.startX;
+        const dy = touchState.currentY - touchState.startY;
+        const dead = 10;
+        rt.keyState.left  = dx < -dead;
+        rt.keyState.right = dx >  dead;
+        rt.keyState.up    = dy < -dead;
+        rt.keyState.down  = dy >  dead;
+    }, { passive: false });
+
+    cv.addEventListener('touchend', (e) => {
+        e.preventDefault();
+        touchState.active = false;
+        rt.keyState.left = rt.keyState.right = rt.keyState.up = rt.keyState.down = false;
+    }, { passive: false });
+}
+
+function drawJoystick() {
+    if (!touchState.active || !rt.fishingActive) return;
+    const { startX: sx, startY: sy, currentX: cx, currentY: cy, radius } = touchState;
+    const dx  = cx - sx, dy = cy - sy;
+    const dist = Math.min(radius, Math.hypot(dx, dy));
+    const ang  = Math.atan2(dy, dx);
+    const tx   = sx + Math.cos(ang) * dist;
+    const ty   = sy + Math.sin(ang) * dist;
+    ctx.save();
+    ctx.globalAlpha = 0.75;
+    // base
+    ctx.fillStyle   = 'rgba(255,255,255,0.1)';
+    ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.arc(sx, sy, radius, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    // seta de direção
+    ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+    ctx.lineWidth = 1.5;
+    [0, 90, 180, 270].forEach(deg => {
+        const rad = deg * Math.PI / 180;
+        ctx.beginPath();
+        ctx.moveTo(sx + Math.cos(rad) * (radius * 0.45), sy + Math.sin(rad) * (radius * 0.45));
+        ctx.lineTo(sx + Math.cos(rad) * (radius * 0.85), sy + Math.sin(rad) * (radius * 0.85));
+        ctx.stroke();
+    });
+    // thumb
+    ctx.fillStyle   = 'rgba(0, 212, 255, 0.6)';
+    ctx.strokeStyle = 'rgba(0, 212, 255, 1)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath(); ctx.arc(tx, ty, 24, 0, Math.PI * 2);
+    ctx.fill(); ctx.stroke();
+    ctx.restore();
+}
 
 const RARITY_GLOW = {
     common:    null,
@@ -153,6 +321,9 @@ let state = {
     money: 0, totalFish: 0, currentZone: 0,
     upgrades: { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0 },
     lastSave: Date.now(),
+    achievements: {},
+    _speciesCaught: {},
+    _legendaryCaught: false,
 };
 
 const rt = {
@@ -181,6 +352,10 @@ const rt = {
     lastCatchTime: 0,
     comboDisplayTimer: 0,
     comboX: 0, comboY: 0,
+    trails: [],
+    paused: false,
+    zoneTransition: 0,
+    netLogAccum: { count: 0, value: 0, timer: 0 },
 };
 
 // =================================================================
@@ -228,6 +403,13 @@ function sellFish(f) {
     const v = Math.floor(f.baseValue * getValueMultiplier());
     state.money += v;
     state.totalFish += 1;
+    // Tracking de espécies e lendários
+    if (!state._speciesCaught) state._speciesCaught = {};
+    state._speciesCaught[f.name] = true;
+    if (f.rarity === 'legendary') state._legendaryCaught = true;
+    // Atualiza compêndio (lazy — só se é espécie nova)
+    const isNew = !state._speciesCaught[f.name];
+    if (isNew) setTimeout(updateCompendium, 0);
     return v;
 }
 
@@ -332,7 +514,7 @@ function drawRope() {
 // =================================================================
 // CÉU · SOL · NUVENS
 // =================================================================
-function drawSky() {
+function drawSky(t) {
     const g = ctx.createLinearGradient(0, 0, 0, waterY());
     // Coloração suave dependente da zona (mais escura no abissal)
     const zoneId = state.currentZone;
@@ -511,6 +693,92 @@ function drawDepthFog() {
 }
 
 // =================================================================
+// TERRENO SUBMERSO (fundo, pedras, corais)
+// =================================================================
+function drawTerrain(t) {
+    const wy = waterY();
+    const wh = waterHeight();
+    const bottom = wy + wh;
+    const zone = state.currentZone;
+    const floorH = 60;
+
+    // Faixa de areia/fundo
+    const sandColors = [
+        ['#D4B896', '#C2A67A', '#A68A5C'],  // Costa
+        ['#B89B72', '#A08060', '#7A6040'],  // Arrecifes
+        ['#3A4A5A', '#2A3A4A', '#1A2A3A'],  // Mar Aberto
+        ['#0A1525', '#050D18', '#020610'],  // Abissal
+    ];
+    const [top, mid, bot] = sandColors[zone];
+    const fg = ctx.createLinearGradient(0, bottom - floorH, 0, bottom);
+    fg.addColorStop(0, top);
+    fg.addColorStop(0.5, mid);
+    fg.addColorStop(1, bot);
+    ctx.fillStyle = fg;
+    ctx.beginPath();
+    ctx.moveTo(0, bottom);
+    for (let x = 0; x <= cw; x += 20) {
+        const h = bottom - floorH + Math.sin(x * 0.015 + t * 0.0003) * 8
+                + Math.sin(x * 0.04) * 4;
+        ctx.lineTo(x, h);
+    }
+    ctx.lineTo(cw, bottom);
+    ctx.closePath();
+    ctx.fill();
+
+    // Detalhes por zona
+    if (zone === 0) {
+        // Conchas e pedrinhas
+        for (let i = 0; i < 12; i++) {
+            const sx = (i * 137.5 + 42) % cw;
+            const sy = bottom - 18 - (i % 5) * 6;
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.beginPath();
+            ctx.arc(sx, sy, 2 + (i % 3), 0, Math.PI * 2);
+            ctx.fill();
+        }
+    } else if (zone === 1) {
+        // Corais (círculos coloridos empilhados)
+        for (let i = 0; i < 8; i++) {
+            const cx = (i * 173.3 + 90) % cw;
+            const cy = bottom - 25 - (i % 3) * 15;
+            const hues = [340, 30, 180, 280, 15, 200, 320, 50];
+            for (let b = 0; b < 3; b++) {
+                ctx.fillStyle = `hsla(${hues[i]}, ${60 + b*10}%, ${55 - b*10}%, 0.5)`;
+                ctx.beginPath();
+                ctx.arc(cx + (b-1)*5, cy - b*8, 7 - b*1.5, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    } else if (zone === 2) {
+        // Pedras escuras
+        for (let i = 0; i < 6; i++) {
+            const rx = (i * 211 + 50) % cw;
+            const ry = bottom - 22;
+            ctx.fillStyle = 'rgba(40,50,60,0.6)';
+            ctx.beginPath();
+            ctx.ellipse(rx + Math.sin(i*3)*8, ry, 12 + (i%3)*8, 6 + (i%2)*4, 0, 0, Math.PI*2);
+            ctx.fill();
+        }
+    } else if (zone === 3) {
+        // Fontes termais (partículas subindo)
+        for (let i = 0; i < 4; i++) {
+            const vx = cw * (0.2 + i * 0.2);
+            const vy = bottom - 40;
+            for (let p = 0; p < 6; p++) {
+                const px = vx + Math.sin(t * 0.003 + i * 2 + p * 0.8) * 12;
+                const py = vy - p * 18 + Math.sin(t * 0.004 + p) * 4;
+                const a = 0.15 + 0.15 * Math.sin(t * 0.005 + p);
+                ctx.fillStyle = `rgba(180, 100, 80, ${a})`;
+                ctx.beginPath();
+                ctx.arc(px, py, 2 + Math.abs(Math.sin(t * 0.007 + i * 1.3 + p * 2.1)), 0, Math.PI * 2);
+                ctx.fill();
+            }
+        }
+    }
+}
+
+// =================================================================
 // PEIXES (renderização canvas com glow por raridade e size próprio)
 // =================================================================
 function spawnFish() {
@@ -536,6 +804,8 @@ function spawnFish() {
         flipped: !fromLeft,
         bobPhase: Math.random() * Math.PI * 2,
         rotation: 0,
+        bossHp: fishType.bossHp || 0,
+        bossMaxHp: fishType.bossHp || 0,
     });
 }
 
@@ -548,15 +818,32 @@ function updateFish(delta) {
         f.y += Math.sin(f.bobPhase) * 0.18;
         f.rotation = Math.sin(f.bobPhase) * 0.06 * (f.flipped ? -1 : 1);
 
+        // Trilhas bioluminescentes (zona abissal, peixes raros+)
+        if (state.currentZone === 3 && f.fish.rarity !== 'common') {
+            f._trailAcc = (f._trailAcc || 0) + delta;
+            if (f._trailAcc > 60) {
+                f._trailAcc = 0;
+                rt.trails.push({
+                    x: f.x - (f.flipped ? -1 : 1) * f.fish.size * 0.3,
+                    y: f.y,
+                    life: 900, maxLife: 900,
+                    color: f.fish.rarity === 'legendary' ? 'rgba(255,179,71,0.7)' :
+                           f.fish.rarity === 'epic'      ? 'rgba(187,134,252,0.55)' :
+                                                            'rgba(78,205,196,0.4)',
+                    size: 1.5 + Math.random() * 3,
+                });
+            }
+        }
+
         // Peixes raros+ fogem do anzol
         if (rt.fishingActive && !rt.hookDescending && f.fish.rarity !== 'common') {
             const hp = hookPxPos();
             const dist = Math.hypot(hp.x - f.x, hp.y - f.y);
             if (dist < 200) {
-                const intensity = (1 - dist / 200) * (f.fish.rarity === 'legendary' ? 4 : f.fish.rarity === 'epic' ? 2.5 : 1.5);
+                const intensity = (1 - dist / 200) * (f.fish.rarity === 'legendary' ? 2.5 : f.fish.rarity === 'epic' ? 1.8 : 1.2);
                 f.vx *= (1 + intensity * dt);
-                const cap = Math.abs(f.vx) * 2.5;
-                if (Math.abs(f.vx) > cap) f.vx = Math.sign(f.vx) * cap;
+                const maxSpeed = (280 + f.fish.speed * 180) * 2.8;
+                if (Math.abs(f.vx) > maxSpeed) f.vx = Math.sign(f.vx) * maxSpeed;
             }
         }
 
@@ -663,6 +950,19 @@ function drawFish(f) {
     ctx.arc(bodyLen * 0.30, -bodyH * 0.25, bodyH * 0.06, 0, Math.PI * 2);
     ctx.fill();
 
+    // Barra de vida do chefão
+    if (f.bossHp > 0 && f.bossMaxHp > 0) {
+        const bw = bodyLen * 0.7, bh = Math.max(3, bodyH * 0.28);
+        const ratio = f.bossHp / f.bossMaxHp;
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.fillRect(-bw/2, -bodyH * 1.3, bw, bh);
+        const barGrad = ctx.createLinearGradient(-bw/2, 0, -bw/2 + bw * ratio, 0);
+        barGrad.addColorStop(0, '#ff4444');
+        barGrad.addColorStop(1, '#ffb347');
+        ctx.fillStyle = barGrad;
+        ctx.fillRect(-bw/2 + 1, -bodyH * 1.3 + 1, (bw - 2) * ratio, bh - 2);
+    }
+
     // Glow por raridade ao redor do peixe
     const glow = RARITY_GLOW[f.fish.rarity];
     if (glow) {
@@ -702,6 +1002,14 @@ function drawFish(f) {
         ctx.font = '9px sans-serif';
         ctx.textAlign = 'center';
         ctx.fillText('♦', 0, -bodyH * 1.6);
+        ctx.restore();
+    } else if (f.fish.rarity === 'uncommon') {
+        const shimmer = 0.25 + 0.2 * Math.sin(rt.time * 0.004);
+        ctx.save();
+        ctx.fillStyle = `rgba(173, 216, 230, ${shimmer})`;
+        ctx.font = '8px sans-serif';
+        ctx.textAlign = 'center';
+        ctx.fillText('·', 0, -bodyH * 1.5);
         ctx.restore();
     }
 
@@ -1081,6 +1389,26 @@ function drawAmbient() {
 }
 
 // =================================================================
+// TRILHAS BIOLUMINESCENTES (zona abissal)
+// =================================================================
+function updateTrails(delta) {
+    for (let i = rt.trails.length - 1; i >= 0; i--) {
+        rt.trails[i].life -= delta;
+        if (rt.trails[i].life <= 0) rt.trails.splice(i, 1);
+    }
+}
+
+function drawTrails() {
+    for (const t of rt.trails) {
+        const a = Math.max(0, t.life / t.maxLife);
+        ctx.fillStyle = t.color.replace(/[\d.]+\)$/, (a * 0.7) + ')');
+        ctx.beginPath();
+        ctx.arc(t.x, t.y, t.size * a, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+// =================================================================
 // BAÚS DO TESOURO
 // =================================================================
 function spawnChest() {
@@ -1113,6 +1441,7 @@ function updateChests(delta) {
                 state.money += valor;
                 emitSparkles(c.x, c.y, '#ffd700', 25);
                 rt.cameraShake = 5;
+                SFX.chest();
                 addLog(`🎁 Baú do tesouro! +${fmtMoney(valor)}`);
                 showBigCatch({ name: 'Baú do Tesouro', emoji: '🎁', rarity: 'rare', size: 0 },
                     valor, 1);
@@ -1126,7 +1455,6 @@ function updateChests(delta) {
 }
 
 function drawChests(t) {
-    const currentTime = rt.time;
     for (const c of rt.chests) {
         ctx.save();
         ctx.translate(c.x, c.y);
@@ -1186,6 +1514,7 @@ function startFishing() {
     addLog('🎣 Anzol lançado! Use WASD para mover.');
     // Splash inicial na superfície
     emitSplash(cw * 0.5, waterY() + 4);
+    SFX.splash();
 }
 
 function endFishing() {
@@ -1197,6 +1526,23 @@ function endFishing() {
 }
 
 function catchFishInteractive(fish) {
+    // Peixes chefões (lendários): múltiplos golpes necessários
+    if (fish.bossHp > 0) {
+        fish.bossHp--;
+        const hp = hookPxPos();
+        if (fish.bossHp > 0) {
+            fish.vx *= 1.6;
+            emitSparkles(hp.x, hp.y, '#ff0000', 25);
+            rt.cameraShake = 10;
+            addLog(`💢 ${fish.fish.name} se debate! ${fish.bossHp} golpe${fish.bossHp>1?'s':''} restante${fish.bossHp>1?'s':''}.`);
+            return;
+        }
+        // Último golpe — bônus de chefão
+        emitSparkles(hp.x, hp.y, '#ffb347', 50);
+        rt.cameraShake = 16;
+        SFX.boss();
+    }
+
     const chance = getMultiCatchChance();
     let count = 1;
     const maxExtras = getMaxExtras();
@@ -1216,6 +1562,8 @@ function catchFishInteractive(fish) {
     for (let i = 0; i < count; i++) total += sellFish(fish.fish);
     total = Math.floor(total * comboMult);
 
+    SFX.catch(fish.fish.rarity);
+    if (rt.combo > 1) SFX.combo(rt.combo);
     showBigCatch(fish.fish, total, count);
     const comboStr = rt.combo > 1 ? ` 🔥 Combo x${rt.combo}` : '';
     addLog(`${fish.fish.emoji} ${fish.fish.name} ×${count} (+${fmtMoney(total)})${comboStr}`);
@@ -1288,8 +1636,18 @@ function tickPassive(delta) {
         const f = rollFish(state.currentZone);
         if (f) {
             const v = sellFish(f);
-            addLog(`🕸️ Rede: ${f.emoji} ${f.name} (+${fmtMoney(v)})`);
+            rt.netLogAccum.count++;
+            rt.netLogAccum.value += v;
         }
+    }
+    // Logar agrupado: a cada 5 peixes ou a cada 20s
+    rt.netLogAccum.timer += delta;
+    const flush = rt.netLogAccum.count >= 5 || (rt.netLogAccum.count > 0 && rt.netLogAccum.timer >= 20000);
+    if (flush) {
+        const { count, value } = rt.netLogAccum;
+        if (count === 1) addLog(`🕸️ Rede: 1 peixe capturado (+${fmtMoney(value)})`);
+        else             addLog(`🕸️ Rede: ${count} peixes capturados (+${fmtMoney(value)})`);
+        rt.netLogAccum = { count: 0, value: 0, timer: 0 };
     }
 }
 
@@ -1369,8 +1727,12 @@ function createZoneCards() {
             e.stopPropagation();
             if (!isZoneUnlocked(zone.id) || rt.fishingActive) return;
             state.currentZone = zone.id;
+            initSeaweed();
+            rt.zoneTransition = 1.0;
+            SFX.zone();
             updateZoneCards();
             updateStats();
+            updateCompendium();
         });
         grid.appendChild(btn);
         zoneRefs[zone.id] = { card: btn, lock: btn.querySelector('.zone-lock') };
@@ -1399,6 +1761,7 @@ function buyUpgrade(id) {
     if (state.money < cost) return;
     state.money -= cost;
     state.upgrades[id] = lvl + 1;
+    SFX.upgrade();
     addLog(`✅ ${up.icon} ${up.name} → Lv ${lvl + 1}`);
     updateUpgradeCards();
     updateZoneCards();
@@ -1444,6 +1807,104 @@ function updateStats() {
 }
 
 // =================================================================
+// CONQUISTAS
+// =================================================================
+const ACHIEVEMENTS = [
+    { id: 'first_catch',  name: 'Primeira Pescaria',   desc: 'Capture seu primeiro peixe',       check: () => state.totalFish >= 1,     reward: 50 },
+    { id: 'catch_50',     name: 'Pescador Dedicado',   desc: 'Capture 50 peixes',                check: () => state.totalFish >= 50,    reward: 500 },
+    { id: 'catch_500',    name: 'Mestre Pescador',     desc: 'Capture 500 peixes',               check: () => state.totalFish >= 500,   reward: 5000 },
+    { id: 'first_legend', name: 'Lenda Viva',          desc: 'Capture um peixe lendário',         check: () => state._legendaryCaught,   reward: 15000 },
+    { id: 'all_zones',    name: 'Explorador dos Mares',desc: 'Desbloqueie todas as zonas',        check: () => state.upgrades.motor >= 12, reward: 20000 },
+    { id: 'rich_10k',     name: 'Pequena Fortuna',     desc: 'Acumule $10.000',                  check: () => state.money >= 10000,     reward: 1000 },
+    { id: 'rich_1m',      name: 'Magnata do Mar',      desc: 'Acumule $1.000.000',               check: () => state.money >= 1000000,   reward: 75000 },
+    { id: 'all_zone0',    name: 'Costa Completa',      desc: 'Capture todas as espécies da Costa',check: () => zoneComplete(0),          reward: 2000 },
+    { id: 'all_zone3',    name: 'Senhor do Abismo',    desc: 'Capture todas as espécies do Abissal',check: () => zoneComplete(3),         reward: 100000 },
+];
+
+function zoneComplete(z) {
+    const species = FISH.filter(f => f.zones.includes(z));
+    return species.every(f => (state._speciesCaught || {})[f.name]);
+}
+
+function checkAchievements() {
+    let awarded = false;
+    for (const a of ACHIEVEMENTS) {
+        if (state.achievements[a.id]) continue;
+        if (a.check()) {
+            state.achievements[a.id] = Date.now();
+            state.money += a.reward;
+            showAchievementToast(a);
+            addLog(`🏆 Conquista: ${a.name} (+${fmtMoney(a.reward)})`);
+            awarded = true;
+        }
+    }
+    return awarded;
+}
+
+function showAchievementToast(a) {
+    const t = document.createElement('div');
+    t.className = 'achievement-toast';
+    t.innerHTML = `<span class="ach-icon">🏆</span><div><strong>${a.name}</strong><span>${a.desc}</span></div>`;
+    document.body.appendChild(t);
+    setTimeout(() => t.remove(), 4000);
+}
+
+// =================================================================
+// COMPÊNDIO DE ESPÉCIES
+// =================================================================
+function buildCompendium() {
+    const grid = document.getElementById('compendiumGrid');
+    if (!grid) return;
+    grid.innerHTML = '';
+    FISH.forEach((f, i) => {
+        const cell = document.createElement('div');
+        cell.className = 'comp-cell';
+        cell.dataset.index = i;
+        cell.title = f.name;
+        const caught = (state._speciesCaught || {})[f.name];
+        cell.innerHTML = `
+            <span class="comp-emoji">${caught ? f.emoji : '❓'}</span>
+            <span class="comp-rarity comp-rarity-${f.rarity}"></span>
+            <span class="comp-name">${caught ? f.name : '???'}</span>
+            ${caught ? `<span class="comp-value">${fmtMoney(f.baseValue)}</span>` : ''}
+        `;
+        grid.appendChild(cell);
+    });
+    const caught = Object.keys(state._speciesCaught || {}).length;
+    const total = FISH.length;
+    const counter = document.getElementById('compendiumCount');
+    if (counter) counter.textContent = `${caught} / ${total} espécies`;
+}
+
+function updateCompendium() {
+    const grid = document.getElementById('compendiumGrid');
+    if (!grid) return;
+    const cells = grid.querySelectorAll('.comp-cell');
+    cells.forEach((cell, i) => {
+        const f = FISH[i];
+        if (!f) return;
+        const caught = (state._speciesCaught || {})[f.name];
+        const em = cell.querySelector('.comp-emoji');
+        const nm = cell.querySelector('.comp-name');
+        const vl = cell.querySelector('.comp-value');
+        if (em) em.textContent = caught ? f.emoji : '❓';
+        if (nm) nm.textContent = caught ? f.name : '???';
+        cell.classList.toggle('comp-caught', !!caught);
+        if (caught && !vl) {
+            const sp = document.createElement('span');
+            sp.className = 'comp-value';
+            sp.textContent = fmtMoney(f.baseValue);
+            cell.appendChild(sp);
+        }
+    });
+    const counter = document.getElementById('compendiumCount');
+    if (counter) {
+        const caught = Object.keys(state._speciesCaught || {}).length;
+        counter.textContent = `${caught} / ${FISH.length} espécies`;
+    }
+}
+
+// =================================================================
 // SAVE / LOAD
 // =================================================================
 function saveGame() {
@@ -1473,6 +1934,9 @@ function resetGame() {
         money: 0, totalFish: 0, currentZone: 0,
         upgrades: { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0 },
         lastSave: Date.now(),
+        achievements: {},
+        _speciesCaught: {},
+        _legendaryCaught: false,
     };
     updateUpgradeCards();
     updateZoneCards();
@@ -1496,6 +1960,29 @@ let lastFrame = performance.now();
 function gameLoop(now) {
     const delta = Math.min(50, now - lastFrame);
     lastFrame = now;
+
+    // Pausa
+    if (rt.paused) {
+        ctx.save();
+        ctx.fillStyle = 'rgba(2, 8, 20, 0.72)';
+        ctx.fillRect(0, 0, cw, ch);
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.fillStyle = '#fff';
+        ctx.font = 'bold 52px sans-serif';
+        ctx.shadowColor = 'rgba(0,212,255,0.6)'; ctx.shadowBlur = 24;
+        ctx.fillText('⏸', cw / 2, ch / 2 - 36);
+        ctx.shadowBlur = 0;
+        ctx.font = 'bold 28px sans-serif';
+        ctx.fillStyle = 'rgba(255,255,255,0.85)';
+        ctx.fillText('PAUSADO', cw / 2, ch / 2 + 12);
+        ctx.font = '16px sans-serif';
+        ctx.fillStyle = 'rgba(0,212,255,0.75)';
+        ctx.fillText('Pressione P para continuar', cw / 2, ch / 2 + 50);
+        ctx.restore();
+        requestAnimationFrame(gameLoop);
+        return;
+    }
+
     rt.time += delta;
 
     tickFishing(now, delta);
@@ -1505,6 +1992,7 @@ function gameLoop(now) {
     updateParticles(delta);
     updateAmbient(delta);
     updateChests(delta);
+    updateTrails(delta);
 
     if (now > rt.nextBubbleTime) {
         spawnBubble();
@@ -1527,16 +2015,18 @@ function gameLoop(now) {
         ctx.translate(sx, sy);
     }
 
-    drawSky();
-    drawSun(rt.time);
+    drawSky(rt.time);
+    if (state.currentZone < 3) drawSun(rt.time);
     drawClouds(rt.time);
     drawWater(rt.time);
     drawCaustics(rt.time);
+    drawTerrain(rt.time);
 
     // Peixes ordenados por tamanho (menores atrás, maiores na frente)
     rt.activeFish.sort((a, b) => a.fish.size - b.fish.size);
     for (const f of rt.activeFish) drawFish(f);
 
+    drawTrails();
     drawDepthFog();
     drawChests(rt.time);
     drawSeaweed(rt.time);
@@ -1552,27 +2042,40 @@ function gameLoop(now) {
 
     drawParticles();
 
-    // Display visual do combo
+    // Display visual do combo (flutua para cima e desaparece)
     if (rt.comboDisplayTimer > 0) {
         rt.comboDisplayTimer -= delta;
-        const alpha = Math.min(1, rt.comboDisplayTimer / 600);
-        const scale = 1 + (1 - alpha) * 0.3;
+        rt.comboY -= delta * 0.022;
+        const alpha = Math.min(1, rt.comboDisplayTimer / 500);
+        const scale = 1.0 + (1 - Math.min(1, rt.comboDisplayTimer / 1800)) * 0.25;
+        const fontSize = Math.round(24 + rt.combo * 1.5);
         ctx.save();
         ctx.translate(rt.comboX, rt.comboY);
         ctx.scale(scale, scale);
         ctx.globalAlpha = alpha;
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        // sombra
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.fillText(`🔥 COMBO x${rt.combo}`, 2, 3);
+        // texto principal
+        ctx.shadowColor = 'rgba(255, 107, 53, 0.9)';
+        ctx.shadowBlur = 18;
         ctx.fillStyle = '#ff6b35';
-        ctx.font = 'bold 28px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.shadowColor = 'rgba(255, 107, 53, 0.8)';
-        ctx.shadowBlur = 15;
         ctx.fillText(`🔥 COMBO x${rt.combo}`, 0, 0);
-        ctx.fillStyle = '#fff';
-        ctx.shadowBlur = 8;
-        ctx.shadowColor = 'rgba(0,0,0,0.5)';
-        ctx.font = 'bold 28px sans-serif';
-        ctx.fillText(`🔥 COMBO x${rt.combo}`, 0, 0);
+        ctx.restore();
+    }
+
+    // Joystick touch
+    drawJoystick();
+
+    // Transição de zona (fade)
+    if (rt.zoneTransition > 0) {
+        rt.zoneTransition = Math.max(0, rt.zoneTransition - delta * 0.003);
+        ctx.save();
+        ctx.globalAlpha = rt.zoneTransition * 0.85;
+        ctx.fillStyle = '#020814';
+        ctx.fillRect(0, 0, cw, ch);
         ctx.restore();
     }
 
@@ -1584,6 +2087,7 @@ function gameLoop(now) {
 function slowUpdate() {
     updateStats();
     updateUpgradeCards();
+    checkAchievements();
 }
 
 function autoSave() { saveGame(); }
@@ -1598,6 +2102,14 @@ function setupInput() {
         if (e.code === 'KeyW' || e.code === 'ArrowUp')    { rt.keyState.up = true; e.preventDefault(); }
         if (e.code === 'KeyS' || e.code === 'ArrowDown')  { rt.keyState.down = true; e.preventDefault(); }
         if (e.code === 'Space') { e.preventDefault(); startFishing(); }
+        if (e.code === 'KeyP') {
+            rt.paused = !rt.paused;
+            SFX.pause(rt.paused);
+        }
+        if ((e.ctrlKey || e.metaKey) && e.code === 'KeyS') {
+            e.preventDefault();
+            if (saveGame()) showSaveToast();
+        }
     });
     document.addEventListener('keyup', (e) => {
         if (e.code === 'KeyA' || e.code === 'ArrowLeft')  rt.keyState.left = false;
@@ -1626,15 +2138,18 @@ function init() {
     document.getElementById('resetBtn').addEventListener('click', resetGame);
 
     setupInput();
+    setupTouch();
     initRope();
     initSeaweed();
+
+    buildCompendium();
 
     setInterval(slowUpdate, 250);
     setInterval(autoSave, 15000);
     window.addEventListener('beforeunload', saveGame);
 
     addLog('🎣 Bem-vindo! Pressione ESPAÇO ou clique em LANÇAR ANZOL.');
-    addLog('🎮 Use WASD ou setas para mover o anzol nas 4 direções.');
+    addLog('🎮 Use WASD/setas · P = pausar · Ctrl+S = salvar');
 
     requestAnimationFrame(gameLoop);
 }
