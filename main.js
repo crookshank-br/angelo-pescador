@@ -93,8 +93,8 @@ const UPGRADES = [
     {
         id: 'motor', name: 'Motor do Barco', icon: '⚙️',
         desc: 'Desbloqueia águas mais profundas',
-        baseCost: 200, costMultiplier: 1.50, maxLevel: 12,
-        // era 1000/1.38 → Arrecifes $950 · Mar $6.4k · Fossa $51.5k
+        baseCost: 500, costMultiplier: 1.80, maxLevel: 12,
+        // Arrecifes $3k · Mar $37.6k · Fossa $722k (mult íngreme = gate real por zona)
     },
     {
         id: 'hook', name: 'Anzol Largo', icon: '⚓',
@@ -1733,7 +1733,7 @@ function catchFishInteractive(fish) {
     }
     rt.lastCatchTime = now;
     if (rt.combo > (state._maxCombo || 0)) state._maxCombo = rt.combo;
-    const comboMult = 1 + (rt.combo - 1) * 0.2;
+    const comboMult = 1 + (rt.combo - 1) * 0.12;  // era 0.20; x10 = ×2.08 em vez de ×2.8
     // Tracking missões de raridade
     questProgress('catch_' + fish.fish.rarity, 1);
     if (fish.fish.rarity === 'rare' || fish.fish.rarity === 'epic' || fish.fish.rarity === 'legendary') {
