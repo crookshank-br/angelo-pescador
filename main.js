@@ -86,7 +86,7 @@ const UPGRADES = [
     {
         id: 'motor', name: 'Motor do Barco', icon: '⚙️',
         desc: 'Desbloqueia águas mais profundas',
-        baseCost: 500, costMultiplier: 1.38, maxLevel: 12,
+        baseCost: 1000, costMultiplier: 1.38, maxLevel: 12,
     },
     {
         id: 'hook', name: 'Anzol Largo', icon: '⚓',
@@ -2184,9 +2184,21 @@ function updateCompendium() {
 // LOJA DE CONSUMÍVEIS
 // =================================================================
 const CONSUMABLES = [
-    { id: 'extraBait',   name: 'Isca Extra',   icon: '🐛', cost: 500,   desc: '2× spawn' },
-    { id: 'magnify',     name: 'Lupa',         icon: '🔍', cost: 1500,  desc: 'Só raros' },
-    { id: 'chronometer', name: 'Cronômetro',   icon: '⏱️', cost: 3000,  desc: '+50% tempo' },
+    {
+        id: 'extraBait', name: 'Isca Extra', icon: '🐛', cost: 500,
+        short: 'Spawn 2× rápido',
+        desc: 'Peixes aparecem 2× mais rápido durante a próxima sessão de pesca.',
+    },
+    {
+        id: 'magnify', name: 'Lupa', icon: '🔍', cost: 1500,
+        short: 'Sem peixes comuns',
+        desc: 'Na próxima sessão, peixes comuns são bloqueados — só aparecem incomuns, raros, épicos e lendários.',
+    },
+    {
+        id: 'chronometer', name: 'Cronômetro', icon: '⏱️', cost: 3000,
+        short: 'Sessão +50% longa',
+        desc: 'A próxima sessão de pesca dura 50% mais tempo, dando mais oportunidades de captura.',
+    },
 ];
 
 function buildConsumables() {
@@ -2196,12 +2208,16 @@ function buildConsumables() {
     CONSUMABLES.forEach(c => {
         const card = document.createElement('div');
         card.className = 'consumable-card';
+        card.title = c.desc;     // tooltip nativo no hover desktop / long-press mobile
         card.innerHTML = `
-            <span class="cons-icon">${c.icon}</span>
+            <span class="cons-icon" aria-hidden="true">${c.icon}</span>
             <span class="cons-name">${c.name}</span>
-            <span class="cons-count">x<span data-cons-count="${c.id}">0</span></span>
-            <button class="cons-buy-btn" data-cons-buy="${c.id}">${fmtMoney(c.cost)}</button>
-            <button class="cons-use-btn" data-cons-use="${c.id}">USAR</button>
+            <span class="cons-effect">${c.short}</span>
+            <span class="cons-count">×<span data-cons-count="${c.id}">0</span> em estoque</span>
+            <button class="cons-buy-btn" data-cons-buy="${c.id}" aria-label="Comprar ${c.name} por ${fmtMoney(c.cost)} — ${c.desc}">
+                💰 ${fmtMoney(c.cost)}
+            </button>
+            <button class="cons-use-btn" data-cons-use="${c.id}" aria-label="Usar ${c.name}">USAR</button>
         `;
         list.appendChild(card);
     });
@@ -2216,12 +2232,16 @@ function buildConsumables() {
 
 function updateConsumables() {
     CONSUMABLES.forEach(c => {
+        const stock = state.consumables?.[c.id] ?? 0;
         const cnt = document.querySelector(`[data-cons-count="${c.id}"]`);
-        if (cnt) cnt.textContent = state.consumables?.[c.id] ?? 0;
+        if (cnt) cnt.textContent = stock;
         const buy = document.querySelector(`[data-cons-buy="${c.id}"]`);
         if (buy) buy.disabled = state.money < c.cost;
         const use = document.querySelector(`[data-cons-use="${c.id}"]`);
-        if (use) use.disabled = (state.consumables?.[c.id] ?? 0) <= 0 || rt.fishingActive;
+        if (use) {
+            use.disabled = stock <= 0 || rt.fishingActive;
+            use.dataset.stock = String(stock);   // mostra badge no canto se estoque > 0
+        }
     });
 }
 

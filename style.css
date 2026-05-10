@@ -1089,37 +1089,67 @@ button { font-family: inherit; }
     font-weight: 600;
 }
 .consumables-list {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 6px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
 }
 .consumable-card {
     background: linear-gradient(135deg, rgba(255, 215, 0, 0.08), rgba(10, 61, 98, 0.55));
     border: 1px solid rgba(255, 215, 0, 0.3);
-    border-radius: 8px;
-    padding: 8px 6px;
-    text-align: center;
-    display: flex;
-    flex-direction: column;
-    gap: 4px;
+    border-radius: 10px;
+    padding: 11px 12px;
+    display: grid;
+    grid-template-columns: 44px 1fr auto;
+    grid-template-rows: auto auto;
+    grid-template-areas:
+        "icon name buy"
+        "icon effect use";
+    column-gap: 11px;
+    row-gap: 4px;
     align-items: center;
 }
-.cons-icon { font-size: 22px; filter: drop-shadow(0 1px 2px rgba(0,0,0,0.5)); }
-.cons-name { font-size: 9.5px; font-weight: 700; letter-spacing: 0.3px; }
-.cons-count { font-size: 9px; opacity: 0.8; font-family: var(--font-mono); }
+.cons-icon {
+    grid-area: icon;
+    font-size: 30px;
+    filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+    text-align: center;
+    align-self: center;
+}
+.cons-name {
+    grid-area: name;
+    font-size: 12.5px;
+    font-weight: 700;
+    letter-spacing: 0.3px;
+    text-align: left;
+    line-height: 1.1;
+}
+.cons-effect {
+    grid-area: effect;
+    font-size: 10.5px;
+    color: var(--cyan-glow);
+    font-weight: 600;
+    text-align: left;
+    line-height: 1.2;
+}
+.cons-count {
+    /* Posição absoluta canto sup. direito da .name row */
+    display: none;     /* substitui pela exibição na badge do botão use */
+}
 .cons-buy-btn {
-    width: 100%;
-    padding: 5px 4px;
+    grid-area: buy;
+    padding: 8px 12px;
     background: linear-gradient(135deg, var(--mid-blue), var(--ocean-blue));
     border: 1px solid var(--panel-border);
     color: var(--foam);
-    border-radius: 5px;
-    font-size: 9px;
+    border-radius: 7px;
+    font-size: 11.5px;
     font-weight: 700;
     cursor: pointer;
     transition: all var(--trans-fast);
     font-family: var(--font-mono);
     letter-spacing: 0.3px;
+    white-space: nowrap;
+    min-width: 92px;
 }
 @media (hover: hover) {
     .cons-buy-btn:hover:not(:disabled) {
@@ -1129,17 +1159,35 @@ button { font-family: inherit; }
 }
 .cons-buy-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 .cons-use-btn {
-    width: 100%;
-    padding: 4px 4px;
-    background: rgba(46, 204, 113, 0.25);
+    grid-area: use;
+    padding: 6px 10px;
+    background: rgba(46, 204, 113, 0.2);
     border: 1px solid var(--success);
     color: var(--success);
-    border-radius: 5px;
-    font-size: 9px;
+    border-radius: 7px;
+    font-size: 11px;
     font-weight: 700;
     cursor: pointer;
     transition: all var(--trans-fast);
-    margin-top: 2px;
+    letter-spacing: 0.5px;
+    white-space: nowrap;
+    min-width: 92px;
+    position: relative;
+}
+.cons-use-btn[data-stock]:not([data-stock="0"])::after {
+    content: attr(data-stock);
+    position: absolute;
+    top: -8px; right: -8px;
+    background: var(--gold);
+    color: var(--deep-blue);
+    font-size: 10px;
+    font-weight: 900;
+    width: 18px; height: 18px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--deep-blue);
 }
 @media (hover: hover) {
     .cons-use-btn:hover:not(:disabled) {
