@@ -1911,14 +1911,20 @@ canvas { touch-action: none; }
 }
 
 /* ============================================
-   BREAKPOINT 2: Mobile landscape (≤700px landscape)
-   Lado a lado bem comprimido
+   BREAKPOINT 2: Mobile landscape (≤900px landscape)
+   Lado a lado bem comprimido — scroll dentro de cada painel
    ============================================ */
 @media (max-width: 900px) and (orientation: landscape) {
     .game-container {
         grid-template-columns: 1.4fr 1fr;
     }
-    .shop-panel { padding: 10px; gap: 9px; }
+    .shop-panel {
+        padding: 10px;
+        gap: 9px;
+        height: 100vh;
+        overflow: hidden;
+    }
+    .panel-tabs-content { flex: 1; overflow-y: auto; }
     .controls-hint { display: none; }
     .zone-card-preview { display: none; }
     .cast-controls { height: 80px; }
@@ -1958,21 +1964,40 @@ canvas { touch-action: none; }
    Stack vertical: canvas em cima, painel embaixo
    ============================================ */
 @media (max-width: 700px) and (orientation: portrait), (max-width: 480px) {
+    /* Em mobile portrait, abrimos o scroll da PÁGINA inteira:
+       - canvas fixo em 55vh no topo
+       - painel cresce livremente e o body rola */
+    html, body { overflow-y: auto; height: auto; }
     .game-container {
         grid-template-columns: 1fr;
-        grid-template-rows: 55vh 1fr;
+        grid-template-rows: auto 1fr;
+        height: auto;
+        min-height: 100vh;
     }
     .ocean-panel {
         height: 55vh;
+        position: sticky;
+        top: 0;
+        z-index: 5;
         border-bottom: 1px solid var(--panel-border);
     }
     .shop-panel {
-        height: 45vh;
+        height: auto;          /* painel cresce com o conteúdo */
+        overflow: visible;      /* não corta nada */
         padding: 12px;
         gap: 10px;
         border-left: none;
         border-top: 1px solid var(--panel-border);
     }
+    /* tabs-content também sem altura fixa */
+    .panel-tabs-content {
+        overflow: visible;
+        flex: none;
+    }
+    /* Compêndio com altura confortável em mobile */
+    .compendium-grid { max-height: none; }
+    /* Log do Pescador também sem altura fixa */
+    #fishingLog { max-height: 320px; }
     /* Canvas overlays */
     .zone-header {
         top: 8px;
