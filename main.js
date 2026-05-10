@@ -1570,7 +1570,7 @@ function updateChests(delta) {
             const dy = hp.y - c.y;
             if (dx * dx + dy * dy < 900) {
                 const zoneChestMult = [1, 8, 50, 300][state.currentZone] ?? 1;
-                const valor = Math.floor((150 + Math.random() * 350) * zoneChestMult * (1 + state.upgrades.bait * 0.05));
+                const valor = Math.floor((75 + Math.random() * 175) * zoneChestMult * (1 + state.upgrades.bait * 0.05));
                 state.money += valor;
                 emitSparkles(c.x, c.y, '#ffd700', 25);
                 rt.cameraShake = 5;
@@ -2467,6 +2467,8 @@ function doPrestige() {
     state._biggestCatch = null;
     state._maxCombo = 0;
     state.consumables = { extraBait: 0, magnify: 0, chronometer: 0 };
+    rt.consumableActive = null;
+    rt.fishingActive = false;
     SFX.catch('legendary');
     rt.cameraShake = 20;
     addLog(`🦪 Prestígio! Ganhou ${gain} pérola(s).`);
@@ -2539,6 +2541,8 @@ function resetGame() {
         quests: { date: '', list: [] },
         consumables: { extraBait: 0, magnify: 0, chronometer: 0 },
     };
+    rt.consumableActive = null;
+    rt.fishingActive = false;
     updateUpgradeCards();
     updateZoneCards();
     updateStats();
