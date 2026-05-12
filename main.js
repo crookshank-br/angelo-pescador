@@ -7,6 +7,9 @@
 (() => {
 'use strict';
 
+// Detecta touch/coarse pointer uma vez no boot (tablet + celular)
+const IS_COARSE = window.matchMedia('(pointer: coarse)').matches;
+
 // =================================================================
 // CONSTANTES
 // =================================================================
@@ -906,7 +909,8 @@ function spawnFish() {
     // Variação leve por instância (±15%) pra não ficar previsível.
     const rarityMult = { common: 1.0, uncommon: 1.15, rare: 1.35, epic: 1.6, legendary: 1.9 };
     const variance = 0.85 + Math.random() * 0.3;
-    const baseSpeed = (220 + fishType.speed * 170) * (rarityMult[fishType.rarity] || 1) * variance;
+    const mobileFactor = IS_COARSE ? 0.70 : 1.0;   // −30% em touch: dá tempo de reagir
+    const baseSpeed = (220 + fishType.speed * 170) * (rarityMult[fishType.rarity] || 1) * variance * mobileFactor;
     const vx = (fromLeft ? 1 : -1) * baseSpeed;
 
     rt.activeFish.push({
@@ -959,7 +963,7 @@ function updateFish(delta) {
                 const dist = Math.sqrt(distSq);
                 const intensity = (1 - dist / 200) * (f.fish.rarity === 'legendary' ? 2.5 : f.fish.rarity === 'epic' ? 1.8 : 1.2);
                 f.vx *= (1 + intensity * dt);
-                const maxSpeed = (280 + f.fish.speed * 180) * 2.8;
+                const maxSpeed = (280 + f.fish.speed * 180) * 2.8 * (IS_COARSE ? 0.70 : 1.0);
                 if (Math.abs(f.vx) > maxSpeed) f.vx = Math.sign(f.vx) * maxSpeed;
             }
         }
@@ -1997,7 +2001,8 @@ function showBigCatch(fishType, totalValue, count) {
     sc.prepend(card);
     const dur = fishType.rarity === 'legendary' ? 4900 : 3300;
     setTimeout(() => card.remove(), dur);
-    while (sc.children.length > 4) sc.lastChild.remove();
+    const maxCards = IS_COARSE ? 2 : 4;   // touch: menos cards pra não tapar o canvas
+    while (sc.children.length > maxCards) sc.lastChild.remove();
 }
 
 function showNewSpeciesToast(fish) {

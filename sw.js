@@ -1,5 +1,5 @@
 // Versão atualizada a cada deploy — bumpa quando os arquivos mudam.
-const VERSION = 'v2.9-combo-escape-2026.05.10';
+const VERSION = 'v3.0-mobile-ux-2026.05.12';
 const CACHE = `angelo-pescador-${VERSION}`;
 const ASSETS = [
     './',

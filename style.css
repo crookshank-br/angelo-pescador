@@ -1919,6 +1919,23 @@ canvas { touch-action: none; }
     }
     /* Joystick virtual maior em coarse pointer */
     /* (raio é controlado em JS — touchState.radius — não precisa CSS) */
+
+    /* Catch showcase: menor em touch para não tapar o canvas */
+    .catch-showcase {
+        width: 148px;
+        right: 8px;
+        gap: 5px;
+    }
+    .big-catch-card {
+        padding: 5px 8px;
+        gap: 8px;
+        border-radius: 10px;
+    }
+    .big-catch-card .fish-big  { font-size: 26px; }
+    .big-catch-card .fish-name { font-size: 10px; }
+    .big-catch-card .fish-value { font-size: 12px; }
+    .fish-rarity-tag { font-size: 7px; padding: 1px 3px; }
+    .fish-count-badge { font-size: 10px; padding: 2px 7px; top: -6px; right: -6px; }
 }
 
 /* ============================================
