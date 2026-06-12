@@ -767,6 +767,7 @@ button { font-family: inherit; }
 /* Bottom controls */
 .controls {
     display: flex;
+    flex-wrap: wrap;
     gap: 8px;
     margin-top: auto;
     padding-top: 12px;
@@ -774,7 +775,7 @@ button { font-family: inherit; }
 }
 
 .control-btn {
-    flex: 1;
+    flex: 1 1 calc(50% - 4px);
     padding: 10px;
     background: rgba(10, 61, 98, 0.6);
     border: 1px solid var(--panel-border);
@@ -1809,8 +1810,25 @@ canvas { touch-action: none; }
     transform: scale(0.92);
     background: rgba(0, 212, 255, 0.3);
 }
+/* Som: visível em todos os dispositivos, abaixo do pause quando ele existe */
+.floating-sound {
+    display: flex;
+    font-size: 16px;
+}
+/* Fullscreen: só mobile */
+.floating-fullscreen {
+    top: 122px;
+    font-size: 20px;
+}
+@media (pointer: fine), (hover: hover) {
+    /* Desktop: pause/fullscreen escondidos, som ocupa o canto */
+    .floating-sound { top: 14px; }
+}
+/* Coarse por último: em híbridos (touch+mouse) o layout mobile vence */
 @media (pointer: coarse) {
     .floating-pause { display: flex; }
+    .floating-sound { top: 68px; }
+    .floating-fullscreen { display: flex; }
 }
 
 /* ============================================

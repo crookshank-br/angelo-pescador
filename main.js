@@ -9,6 +9,24 @@
 
 // Detecta touch/coarse pointer uma vez no boot (tablet + celular)
 const IS_COARSE = window.matchMedia('(pointer: coarse)').matches;
+// Acessibilidade: usuário pediu menos movimento no SO
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+// Vibração háptica (só mobile; falha silenciosa onde não suportado)
+function vibrate(pattern) {
+    if (!IS_COARSE || !navigator.vibrate) return;
+    try { navigator.vibrate(pattern); } catch (e) {}
+}
+
+// Wake Lock: impede a tela de apagar durante a pescaria no celular
+let wakeLock = null;
+async function requestWakeLock() {
+    if (!IS_COARSE || !('wakeLock' in navigator)) return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) {}
+}
+document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && wakeLock !== null) requestWakeLock();
+});
 
 // =================================================================
 // CONSTANTES
@@ -131,12 +149,44 @@ const UPGRADES = [
 // =================================================================
 const SFX = (() => {
     let ac = null;
+    let muted = localStorage.getItem('angeloPescadorMuted') === '1';
+    let ambNodes = null;
     function ctx() {
         if (!ac) ac = new (window.AudioContext || window.webkitAudioContext)();
         if (ac.state === 'suspended') ac.resume();
         return ac;
     }
+    // Ruído filtrado + LFO lento = som de ondas do mar (100% sintetizado)
+    function startAmbience() {
+        if (muted || ambNodes) return;
+        try {
+            const c = ctx();
+            const len = c.sampleRate * 4;
+            const buf = c.createBuffer(1, len, c.sampleRate);
+            const data = buf.getChannelData(0);
+            for (let i = 0; i < len; i++) data[i] = Math.random() * 2 - 1;
+            const src = c.createBufferSource();
+            src.buffer = buf; src.loop = true;
+            const filter = c.createBiquadFilter();
+            filter.type = 'lowpass'; filter.frequency.value = 380; filter.Q.value = 0.4;
+            const gain = c.createGain();
+            gain.gain.value = 0.016;
+            const lfo = c.createOscillator();
+            const lfoGain = c.createGain();
+            lfo.frequency.value = 0.11; lfoGain.gain.value = 0.011;
+            lfo.connect(lfoGain); lfoGain.connect(gain.gain);
+            src.connect(filter); filter.connect(gain); gain.connect(c.destination);
+            src.start(); lfo.start();
+            ambNodes = { src, lfo };
+        } catch (e) {}
+    }
+    function stopAmbience() {
+        if (!ambNodes) return;
+        try { ambNodes.src.stop(); ambNodes.lfo.stop(); } catch (e) {}
+        ambNodes = null;
+    }
     function tone(freq, type, dur, vol = 0.28, startDetune = 0, endDetune = 0) {
+        if (muted) return;
         try {
             const c = ctx();
             const osc = c.createOscillator();
@@ -153,6 +203,14 @@ const SFX = (() => {
     }
     function delay(fn, ms) { setTimeout(fn, ms); }
     return {
+        get muted() { return muted; },
+        toggleMute() {
+            muted = !muted;
+            localStorage.setItem('angeloPescadorMuted', muted ? '1' : '0');
+            if (muted) stopAmbience(); else startAmbience();
+            return muted;
+        },
+        ambience() { startAmbience(); },
         splash() {
             tone(200, 'sine', 0.25, 0.12, 0, -400);
             tone(110, 'sine', 0.35, 0.08, 0, -200);
@@ -381,6 +439,7 @@ const rt = {
     particles: [],
     bubbles: [],
     rope: null,
+    floatTexts: [],
     cameraShake: 0,
     time: 0,
     keyState: { left: false, right: false, up: false, down: false },
@@ -1369,6 +1428,7 @@ function drawBubbles() {
 // PARTÍCULAS — sparkles e splash
 // =================================================================
 function emitSparkles(x, y, color, count) {
+    if (REDUCED_MOTION) count = Math.ceil(count / 3);
     for (let i = 0; i < count; i++) {
         const angle = Math.random() * Math.PI * 2;
         const speed = 70 + Math.random() * 200;
@@ -1605,6 +1665,8 @@ function updateChests(delta) {
                 const valor = Math.floor((30 + Math.random() * 120) * zoneChestMult * (1 + state.upgrades.bait * 0.05));
                 state.money += valor;
                 emitSparkles(c.x, c.y, '#ffd700', 25);
+                pushFloatText(c.x, c.y - 20, '+' + fmtMoney(valor), '#ffd700', 20);
+                vibrate([30, 50, 40]);
                 rt.cameraShake = 5;
                 SFX.chest();
                 addLog(`🎁 Baú do tesouro! +${fmtMoney(valor)}`);
@@ -1682,6 +1744,8 @@ function startFishing() {
     // Splash inicial na superfície
     emitSplash(cw * 0.5, waterY() + 4);
     SFX.splash();
+    SFX.ambience();        // inicia som de ondas (1º gesto do usuário libera o AudioContext)
+    requestWakeLock();     // tela não apaga no celular durante a sessão
 }
 
 function endFishing() {
@@ -1709,6 +1773,35 @@ function tickCooldown(now) {
     }
 }
 
+// Texto flutuante de dinheiro no ponto da captura (juice barato)
+function pushFloatText(x, y, text, color, size = 16) {
+    rt.floatTexts.push({ x, y, text, color, size, life: 1400, maxLife: 1400 });
+    if (rt.floatTexts.length > 10) rt.floatTexts.shift();
+}
+function updateFloatTexts(delta) {
+    for (let i = rt.floatTexts.length - 1; i >= 0; i--) {
+        const t = rt.floatTexts[i];
+        t.life -= delta;
+        t.y -= delta * 0.045;
+        if (t.life <= 0) rt.floatTexts.splice(i, 1);
+    }
+}
+function drawFloatTexts() {
+    if (!rt.floatTexts.length) return;
+    ctx.save();
+    ctx.textAlign = 'center';
+    for (const t of rt.floatTexts) {
+        ctx.globalAlpha = Math.min(1, t.life / (t.maxLife * 0.4));
+        ctx.font = `800 ${t.size}px 'Segoe UI', sans-serif`;
+        ctx.strokeStyle = 'rgba(0,0,0,0.6)';
+        ctx.lineWidth = 3;
+        ctx.strokeText(t.text, t.x, t.y);
+        ctx.fillStyle = t.color;
+        ctx.fillText(t.text, t.x, t.y);
+    }
+    ctx.restore();
+}
+
 function catchFishInteractive(fish) {
     // Peixes chefões (lendários): múltiplos golpes necessários
     if (fish.bossHp > 0) {
@@ -1718,6 +1811,7 @@ function catchFishInteractive(fish) {
             fish.vx *= 1.6;
             emitSparkles(hp.x, hp.y, '#ff0000', 25);
             rt.cameraShake = 10;
+            vibrate(20);
             addLog(`💢 ${fish.fish.name} se debate! ${fish.bossHp} golpe${fish.bossHp>1?'s':''} restante${fish.bossHp>1?'s':''}.`);
             return;
         }
@@ -1776,6 +1870,14 @@ function catchFishInteractive(fish) {
                     : fish.fish.rarity === 'rare'      ? 18
                     : 12;
     emitSparkles(hp.x, hp.y, color, partCount);
+    pushFloatText(hp.x, hp.y - 26, '+' + fmtMoney(total), color,
+        fish.fish.rarity === 'legendary' ? 24 : fish.fish.rarity === 'epic' ? 20 : 16);
+
+    // Vibração háptica por raridade (mobile)
+    if (fish.fish.rarity === 'legendary')      vibrate([40, 60, 40, 60, 90]);
+    else if (fish.fish.rarity === 'epic')      vibrate([30, 40, 30]);
+    else if (fish.fish.rarity === 'rare')      vibrate(30);
+    else                                       vibrate(12);
 
     // Camera shake conforme raridade
     if (fish.fish.rarity === 'legendary') rt.cameraShake = 14;
@@ -2593,12 +2695,37 @@ function resetGame() {
     addLog('🔄 Jogo reiniciado');
 }
 
-function showSaveToast() {
+function showSaveToast(msg = '💾 Jogo salvo!') {
     const t = document.createElement('div');
     t.className = 'save-toast';
-    t.textContent = '💾 Jogo salvo!';
+    t.textContent = msg;
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 2200);
+}
+
+// === EXPORTAR / IMPORTAR SAVE (protege o progresso entre aparelhos) ===
+function exportSave() {
+    try {
+        saveGame();
+        const code = btoa(unescape(encodeURIComponent(JSON.stringify(state))));
+        const fallback = () => prompt('Copie seu código de save:', code);
+        if (navigator.clipboard?.writeText) {
+            navigator.clipboard.writeText(code)
+                .then(() => showSaveToast('📤 Código copiado! Cole em outro aparelho.'))
+                .catch(fallback);
+        } else fallback();
+    } catch (e) { alert('Erro ao exportar o save.'); }
+}
+
+function importSave() {
+    const code = prompt('Cole aqui o código do save exportado:');
+    if (!code) return;
+    try {
+        const s = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
+        if (!s || typeof s !== 'object' || typeof s.money !== 'number') throw new Error('inválido');
+        localStorage.setItem(SAVE_KEY, JSON.stringify(s));
+        location.reload();   // recarrega com o novo save aplicado
+    } catch (e) { alert('Código inválido — confira se copiou o texto completo.'); }
 }
 
 // =================================================================
@@ -2654,6 +2781,7 @@ function runFrame(now) {
     updateAmbient(delta);
     updateChests(delta);
     updateTrails(delta);
+    updateFloatTexts(delta);
 
     if (now > rt.nextBubbleTime) {
         spawnBubble();
@@ -2672,7 +2800,7 @@ function runFrame(now) {
     // Render
     ctx.clearRect(0, 0, cw, ch);
     ctx.save();
-    if (rt.cameraShake > 0) {
+    if (rt.cameraShake > 0 && !REDUCED_MOTION) {
         const sx = (Math.random() - 0.5) * rt.cameraShake;
         const sy = (Math.random() - 0.5) * rt.cameraShake;
         ctx.translate(sx, sy);
@@ -2703,6 +2831,7 @@ function runFrame(now) {
     }
 
     drawParticles();
+    drawFloatTexts();
 
     // Display visual do combo (flutua para cima e desaparece)
     if (rt.comboDisplayTimer > 0) {
@@ -2844,6 +2973,10 @@ function init() {
     cacheDOM();
     resizeCanvas();
     window.addEventListener('resize', resizeCanvas);
+    // ResizeObserver cobre casos que 'resize' não pega (iframe, painel oculto no load)
+    if (window.ResizeObserver) {
+        new ResizeObserver(resizeCanvas).observe(document.getElementById('oceanPanel'));
+    }
 
     createUpgradeCards();
     createZoneCards();
@@ -2869,6 +3002,23 @@ function init() {
         const btn = document.getElementById('floatingPauseBtn');
         if (btn) btn.textContent = rt.paused ? '▶' : '⏸';
     });
+    // Botão de som (desktop + mobile)
+    const soundBtn = document.getElementById('soundBtn');
+    if (soundBtn) {
+        soundBtn.textContent = SFX.muted ? '🔇' : '🔊';
+        soundBtn.addEventListener('click', () => {
+            const m = SFX.toggleMute();
+            soundBtn.textContent = m ? '🔇' : '🔊';
+        });
+    }
+    // Tela cheia (mobile)
+    document.getElementById('fullscreenBtn')?.addEventListener('click', () => {
+        if (document.fullscreenElement) document.exitFullscreen?.();
+        else document.documentElement.requestFullscreen?.().catch(() => {});
+    });
+    // Exportar / importar save
+    document.getElementById('exportBtn')?.addEventListener('click', exportSave);
+    document.getElementById('importBtn')?.addEventListener('click', importSave);
     document.getElementById('closeTrophiesBtn')?.addEventListener('click', () => {
         document.getElementById('trophiesModal').classList.remove('show');
     });

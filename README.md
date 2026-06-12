@@ -17,12 +17,17 @@ Também funciona **offline** depois do primeiro acesso (PWA / Service Worker).
 
 - Renderização Canvas 2D com escala por `devicePixelRatio`
 - Física de corda via integração de Verlet (26 segmentos)
-- Sistema de partículas (splash + brilhos)
+- Sistema de partículas (splash + brilhos) + textos flutuantes de dinheiro
 - Cáusticos de água com `globalCompositeOperation: 'screen'`
 - UI em glassmorphism (backdrop-filter)
 - Economia exponencial com rebalanceamento por raridade
-- Save/load via `localStorage`
+- Save/load via `localStorage` + exportar/importar entre aparelhos
 - PWA instalável com cache offline
+- Áudio 100% sintetizado via Web Audio API (SFX + ambiente de ondas) com mute persistente
+- Vibração háptica em capturas no mobile (`navigator.vibrate`)
+- Wake Lock — tela não apaga durante a pescaria no celular
+- Tela cheia no mobile (Fullscreen API)
+- Acessibilidade: respeita `prefers-reduced-motion`
 
 ## 📁 Estrutura
 

@@ -34,6 +34,8 @@
             <canvas id="gameCanvas" aria-label="Cena do oceano com peixes nadando"></canvas>
 
             <button class="floating-pause" id="floatingPauseBtn" aria-label="Pausar/retomar jogo" type="button">⏸</button>
+            <button class="floating-pause floating-sound" id="soundBtn" aria-label="Ligar/desligar som" type="button">🔊</button>
+            <button class="floating-pause floating-fullscreen" id="fullscreenBtn" aria-label="Tela cheia" type="button">⛶</button>
 
             <!-- UI OVERLAY -->
             <header class="zone-header glass">
@@ -150,11 +152,13 @@
 
             <div class="controls">
                 <button id="saveBtn" class="control-btn" aria-label="Salvar progresso">💾 Salvar</button>
+                <button id="exportBtn" class="control-btn" aria-label="Exportar save">📤 Exportar</button>
+                <button id="importBtn" class="control-btn" aria-label="Importar save">📥 Importar</button>
                 <button id="resetBtn" class="control-btn danger" aria-label="Reiniciar jogo">🔄 Reiniciar</button>
             </div>
 
             <footer class="app-footer">
-                <span class="version-tag">v3.0 · <a href="https://github.com/crookshank-br/angelo-pescador" target="_blank" rel="noopener">GitHub</a></span>
+                <span class="version-tag">v3.1 · <a href="https://github.com/crookshank-br/angelo-pescador" target="_blank" rel="noopener">GitHub</a></span>
             </footer>
         </aside>
     </div>
