@@ -1027,16 +1027,18 @@ function updateFish(delta) {
             }
         }
 
-        // Colisão com anzol
-        if (rt.fishingActive && !rt.hookDescending) {
+        // Colisão com anzol (respeita invulnerabilidade de chefão entre golpes)
+        if (rt.fishingActive && !rt.hookDescending && !(f.invulnUntil && rt.time < f.invulnUntil)) {
             const hp = hookPxPos();
             const dx = hp.x - f.x;
             const dy = hp.y - f.y;
             const r = getHookRadius();
             if (dx * dx + dy * dy < r * r) {
-                catchFishInteractive(f);
-                rt.activeFish.splice(i, 1);
-                continue;
+                const caught = catchFishInteractive(f);
+                if (caught) {
+                    rt.activeFish.splice(i, 1);
+                }
+                continue;   // chefão que sobreviveu continua na tela para o próximo golpe
             }
         }
         if (f.x < -100 || f.x > cw + 100) {
@@ -1802,18 +1804,28 @@ function drawFloatTexts() {
     ctx.restore();
 }
 
+// Retorna true se o peixe foi fisgado (deve ser removido);
+// false se era um chefão que sobreviveu ao golpe (continua na tela).
 function catchFishInteractive(fish) {
     // Peixes chefões (lendários): múltiplos golpes necessários
     if (fish.bossHp > 0) {
         fish.bossHp--;
         const hp = hookPxPos();
         if (fish.bossHp > 0) {
-            fish.vx *= 1.6;
+            // Foge acelerando e fica imune por um instante — o jogador precisa
+            // re-alcançá-lo para o próximo golpe (senão seria drenado num frame).
+            // Clampa a velocidade pra não ficar impossível nos golpes finais.
+            const bossMaxSpeed = (280 + fish.fish.speed * 180) * 2.8 * (IS_COARSE ? 0.70 : 1.0);
+            const fleeSpeed = Math.min(Math.abs(fish.vx) * 1.6, bossMaxSpeed);
+            fish.vx = Math.sign(fish.vx || 1) * fleeSpeed;
+            fish.invulnUntil = rt.time + 450;
             emitSparkles(hp.x, hp.y, '#ff0000', 25);
+            pushFloatText(fish.x, fish.y - 24, `${fish.bossHp} golpe${fish.bossHp>1?'s':''}!`, '#ff5555', 15);
             rt.cameraShake = 10;
             vibrate(20);
+            SFX.boss();
             addLog(`💢 ${fish.fish.name} se debate! ${fish.bossHp} golpe${fish.bossHp>1?'s':''} restante${fish.bossHp>1?'s':''}.`);
-            return;
+            return false;
         }
         // Último golpe — bônus de chefão
         emitSparkles(hp.x, hp.y, '#ffb347', 50);
@@ -1883,6 +1895,7 @@ function catchFishInteractive(fish) {
     if (fish.fish.rarity === 'legendary') rt.cameraShake = 14;
     else if (fish.fish.rarity === 'epic') rt.cameraShake = 7;
     else if (count >= 3)                   rt.cameraShake = 4;
+    return true;   // fisgado com sucesso → caller remove o peixe
 }
 
 function tickFishing(now, delta) {
