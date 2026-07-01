@@ -486,7 +486,9 @@ function consumableFiltersFish(fish) {
 }
 function getHookRadius()     { return HOOK_BASE_RADIUS * (1 + state.upgrades.hook * 0.08); }
 function getMultiCatchChance() {
-    return Math.min(0.50, 0.01 + state.upgrades.hook * 0.035 + state.upgrades.bait * 0.010);
+    // Anzol Sortudo (pérola): +3% de chance de captura múltipla por nível
+    const luck = (state.pearlBonuses?.multi || 0) * 0.03;
+    return Math.min(0.65, 0.01 + state.upgrades.hook * 0.035 + state.upgrades.bait * 0.010 + luck);
 }
 function getMaxExtras()        { return 1 + Math.floor(state.upgrades.hook / 8); }
 function getBaitRarityBonus()  { return Math.min(0.35, state.upgrades.bait * 0.025); }
@@ -1861,6 +1863,7 @@ function catchFishInteractive(fish) {
     SFX.catch(fish.fish.rarity);
     if (rt.combo > 1) SFX.combo(rt.combo);
     showBigCatch(fish.fish, total, count);
+    if (fish.fish.rarity === 'legendary') showLegendaryAnimation(fish.fish, total);
     const comboStr = rt.combo > 1 ? ` 🔥 Combo x${rt.combo}` : '';
     addLog(`${fish.fish.emoji} ${fish.fish.name} ×${count} (+${fmtMoney(total)})${comboStr}`);
 
@@ -2133,6 +2136,53 @@ function showNewSpeciesToast(fish) {
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 3500);
     SFX.tone ? null : null; // já toca SFX.catch normal
+}
+
+// Momento épico em tela cheia ao fisgar um lendário ⭐
+let legendaryAnimBusy = false;
+function showLegendaryAnimation(fish, value) {
+    if (legendaryAnimBusy) return;        // evita empilhar se vierem 2 seguidos
+    legendaryAnimBusy = true;
+
+    const reduced = REDUCED_MOTION;
+    const dur = reduced ? 1400 : 2600;
+
+    const ov = document.createElement('div');
+    ov.className = 'legendary-anim' + (reduced ? ' reduced' : '');
+
+    // Chuva de brilhos (só quando movimento não está reduzido)
+    let sparkles = '';
+    if (!reduced) {
+        for (let i = 0; i < 14; i++) {
+            const left = Math.round(6 + Math.random() * 88);
+            const delay = (Math.random() * 0.6).toFixed(2);
+            const dm = (0.9 + Math.random() * 1.1).toFixed(2);
+            const em = ['✨', '⭐', '🌟'][i % 3];
+            sparkles += `<span class="la-spark" style="left:${left}%;animation-delay:${delay}s;animation-duration:${dm}s">${em}</span>`;
+        }
+    }
+
+    ov.innerHTML = `
+        <div class="la-rays" aria-hidden="true"></div>
+        <div class="la-burst" aria-hidden="true"></div>
+        ${sparkles}
+        <div class="la-center">
+            <div class="la-banner">✦ LENDÁRIO! ✦</div>
+            <div class="la-fish">${fish.emoji}</div>
+            <div class="la-name">${fish.name}</div>
+            <div class="la-value">+${fmtMoney(value)}</div>
+        </div>
+    `;
+    document.body.appendChild(ov);
+
+    // Bônus sensorial
+    vibrate([50, 60, 50, 60, 120]);
+    if (!reduced) rt.cameraShake = 18;
+
+    setTimeout(() => {
+        ov.classList.add('leaving');
+        setTimeout(() => { ov.remove(); legendaryAnimBusy = false; }, 400);
+    }, dur);
 }
 
 function addLog(text) {
@@ -2636,7 +2686,7 @@ function doPrestige() {
 }
 function buyPearlBonus(type) {
     if (state.pearls <= 0) return;
-    const labels = { value: 'Mercado das Pérolas', spawn: 'Cardume Permanente' };
+    const labels = { value: 'Mercado das Pérolas', spawn: 'Cardume Permanente', multi: 'Anzol Sortudo' };
     if (!confirm(`Gastar 1 Pérola para subir "${labels[type] || type}"? Pérolas são permanentes mas escassas.`)) return;
     state.pearls -= 1;
     state.pearlBonuses[type] = (state.pearlBonuses[type] || 0) + 1;
