@@ -1,6 +1,6 @@
 # 🎣 Angelo Pescador — Idle Fishing
 
-Jogo incremental de pesca em HTML5 Canvas, CSS3 e JavaScript puro. Controle o anzol em tempo real, descubra 24 espécies, desbloqueie 4 zonas oceânicas e evolua suas melhorias.
+Jogo incremental de pesca em HTML5 Canvas, CSS3 e JavaScript puro. Controle o anzol em tempo real, descubra 25 espécies, desbloqueie 4 zonas oceânicas e evolua suas melhorias.
 
 ## 🕹️ Jogar online
 

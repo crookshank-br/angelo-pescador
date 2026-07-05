@@ -53,6 +53,15 @@ body {
 
 button { font-family: inherit; }
 
+/* Foco visível para navegação por teclado (WCAG 2.4.7) */
+:focus-visible {
+    outline: 3px solid var(--gold);
+    outline-offset: 2px;
+    border-radius: 4px;
+}
+/* Não mostra o anel ao clicar com mouse/toque, só no teclado */
+:focus:not(:focus-visible) { outline: none; }
+
 .game-container {
     display: grid;
     grid-template-columns: minmax(600px, 1.5fr) minmax(420px, 1fr);
@@ -87,6 +96,19 @@ button { font-family: inherit; }
     box-shadow:
         0 4px 24px rgba(0, 0, 0, 0.35),
         inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* Mobile/touch: backdrop-filter sobre o canvas que repinta a 60fps é o maior vilão
+   de bateria/FPS. Troca o blur por um fundo sólido — visualmente equivalente sobre
+   o oceano animado, sem custo de composição contínuo. */
+@media (pointer: coarse) {
+    .glass,
+    .zone-header,
+    .floating-pause {
+        backdrop-filter: none !important;
+        -webkit-backdrop-filter: none !important;
+        background: var(--panel-bg-strong);
+    }
 }
 
 /* Header da zona */

@@ -1,7 +1,7 @@
 /* ================================================================
    ANGELO PESCADOR — Canvas Edition
    Renderização Canvas 2D · Física verlet de corda · Partículas
-   Economia rebalanceada · Bestiário expandido (24 espécies)
+   Economia rebalanceada · Bestiário expandido (25 espécies)
    ================================================================ */
 
 (() => {
@@ -41,6 +41,7 @@ const HOOK_DESCENT_MS     = 600;      // tempo do anzol descer
 const ROPE_SEGMENTS       = 26;
 const MAX_FISH_ON_SCREEN  = 14;
 const COOLDOWN_MS         = 2000;     // 2s pra animação acabar
+const OFFLINE_CAP_MINUTES = 480;      // teto de 8h de pesca offline da rede
 
 // =================================================================
 // ZONAS
@@ -53,7 +54,7 @@ const ZONES = [
 ];
 
 // =================================================================
-// BESTIÁRIO (24 espécies, com tamanhos distintos)
+// BESTIÁRIO (25 espécies, com tamanhos distintos)
 // =================================================================
 const FISH = [
     // ── COSTA RASA ── pequenos e baratos
@@ -207,9 +208,13 @@ const SFX = (() => {
         toggleMute() {
             muted = !muted;
             localStorage.setItem('angeloPescadorMuted', muted ? '1' : '0');
-            if (muted) stopAmbience(); else startAmbience();
+            if (muted) { stopAmbience(); if (ac) { try { ac.suspend(); } catch (e) {} } }
+            else startAmbience();
             return muted;
         },
+        // Suspende/retoma o AudioContext (poupa bateria com a aba oculta)
+        suspend() { if (ac && ac.state === 'running') { try { ac.suspend(); } catch (e) {} } },
+        resume()  { if (ac && ac.state === 'suspended' && !muted) { try { ac.resume(); } catch (e) {} } },
         ambience() { startAmbience(); },
         splash() {
             tone(200, 'sine', 0.25, 0.12, 0, -400);
@@ -1668,6 +1673,8 @@ function updateChests(delta) {
                 const zoneChestMult = [1, 16, 160, 2500][state.currentZone] ?? 1;
                 const valor = Math.floor((30 + Math.random() * 120) * zoneChestMult * (1 + state.upgrades.bait * 0.05));
                 state.money += valor;
+                state.totalEarned = (state.totalEarned || 0) + valor;   // conta para prestígio
+                questProgress('earn', valor);
                 emitSparkles(c.x, c.y, '#ffd700', 25);
                 pushFloatText(c.x, c.y - 20, '+' + fmtMoney(valor), '#ffd700', 20);
                 vibrate([30, 50, 40]);
@@ -1850,15 +1857,20 @@ function catchFishInteractive(fish) {
     rt.lastCatchTime = now;
     if (rt.combo > (state._maxCombo || 0)) state._maxCombo = rt.combo;
     const comboMult = 1 + (rt.combo - 1) * 0.12;  // era 0.20; x10 = ×2.08 em vez de ×2.8
-    // Tracking missões de raridade
-    questProgress('catch_' + fish.fish.rarity, 1);
-    if (fish.fish.rarity === 'rare' || fish.fish.rarity === 'epic' || fish.fish.rarity === 'legendary') {
-        questProgress('catch_rare', 1);
-    }
+    // As missões de raridade são contabilizadas dentro de sellFish (uma vez por peixe
+    // efetivamente vendido). Não repetir aqui — evita contagem em dobro.
 
     let total = 0;
     for (let i = 0; i < count; i++) total += sellFish(fish.fish);
-    total = Math.floor(total * comboMult);
+    // O bônus de combo precisa ser CREDITADO (sellFish só somou o valor bruto ao dinheiro).
+    const withCombo   = Math.floor(total * comboMult);
+    const comboBonus  = withCombo - total;
+    if (comboBonus > 0) {
+        state.money      += comboBonus;
+        state.totalEarned = (state.totalEarned || 0) + comboBonus;
+        questProgress('earn', comboBonus);
+    }
+    total = withCombo;
 
     SFX.catch(fish.fish.rarity);
     if (rt.combo > 1) SFX.combo(rt.combo);
@@ -2135,7 +2147,6 @@ function showNewSpeciesToast(fish) {
     `;
     document.body.appendChild(t);
     setTimeout(() => t.remove(), 3500);
-    SFX.tone ? null : null; // já toca SFX.catch normal
 }
 
 // Momento épico em tela cheia ao fisgar um lendário ⭐
@@ -2498,7 +2509,7 @@ function openTrophiesModal() {
             <div class="trophy-value">${t.value}</div>
         </div>
     `).join('');
-    document.getElementById('trophiesModal').classList.add('show');
+    openModal(document.getElementById('trophiesModal'));
 }
 
 // =================================================================
@@ -2575,6 +2586,12 @@ function todayKey() {
 function ensureQuestsForToday() {
     if (!state.quests) state.quests = { date: '', list: [] };
     if (state.quests.date === todayKey() && state.quests.list.length) return;
+    // Anti-abuso de relógio: além de virar o dia, exige ~18h reais desde o último
+    // sorteio antes de renovar (impede adiantar o relógio p/ farmar recompensas).
+    // Não bloqueia o 1º sorteio (list vazia) nem saves antigos (rolledAt ausente).
+    const nowMs = Date.now();
+    if (state.quests.list.length && state.quests.rolledAt &&
+        nowMs - state.quests.rolledAt < 18 * 3600 * 1000) return;
     // Filtra missões pelas zonas acessíveis (motor atual)
     const motorLvl = state.upgrades?.motor || 0;
     const reachable = QUEST_POOL.filter(q => q.minMotor <= motorLvl);
@@ -2594,7 +2611,7 @@ function ensureQuestsForToday() {
             done: false,
         });
     }
-    state.quests = { date: todayKey(), list };
+    state.quests = { date: todayKey(), list, rolledAt: nowMs };
 }
 
 function questProgress(track, n) {
@@ -2630,13 +2647,62 @@ function renderQuests() {
         item.className = 'quest-item' + (q.done ? ' quest-done' : '');
         item.innerHTML = `
             <div class="quest-row">
-                <span class="quest-desc">${q.desc}</span>
+                <span class="quest-desc"></span>
                 <span class="quest-reward">${q.done ? '✓' : '+' + fmtMoney(q.reward)}</span>
             </div>
             <div class="quest-bar"><div class="quest-bar-fill" style="width: ${pct}%"></div></div>
             <div class="quest-progress">${Math.min(q.progress, q.goal)} / ${q.goal}</div>
         `;
+        // desc via textContent — nunca interpola HTML de dados que podem vir de save importado
+        item.querySelector('.quest-desc').textContent = q.desc;
         list.appendChild(item);
+    });
+}
+
+// =================================================================
+// GESTÃO DE FOCO DE MODAIS (acessibilidade — WCAG 2.1.2 / 2.4.3)
+// =================================================================
+let _lastFocused = null;
+const MODAL_SEL = '.modal-backdrop.show, .tutorial-overlay.show';
+const FOCUSABLE_SEL = 'button:not([disabled]), [href], input:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+function openModal(modal) {
+    if (!modal) return;
+    _lastFocused = document.activeElement;
+    modal.classList.add('show');
+    // Foca o 1º controle do diálogo (normalmente o botão de fechar)
+    setTimeout(() => modal.querySelector(FOCUSABLE_SEL)?.focus(), 30);
+}
+function closeModalEl(modal, onClose) {
+    if (!modal || !modal.classList.contains('show')) return;
+    modal.classList.remove('show');
+    if (typeof onClose === 'function') onClose();
+    if (_lastFocused && typeof _lastFocused.focus === 'function') _lastFocused.focus();
+    _lastFocused = null;
+}
+function dismissTutorial() {
+    const ov = document.getElementById('tutorialOverlay');
+    if (!ov || !ov.classList.contains('show')) return;
+    ov.classList.remove('show');
+    try { localStorage.setItem('angeloPescadorTutorialDone', '1'); } catch (e) {}
+}
+// Escape fecha o modal aberto; Tab fica preso dentro dele (focus trap)
+function setupModalKeys() {
+    document.addEventListener('keydown', (e) => {
+        const modal = document.querySelector(MODAL_SEL);
+        if (!modal) return;
+        if (e.key === 'Escape') {
+            e.preventDefault();
+            if (modal.id === 'tutorialOverlay') dismissTutorial();
+            else closeModalEl(modal);
+            return;
+        }
+        if (e.key !== 'Tab') return;
+        const f = modal.querySelectorAll(FOCUSABLE_SEL);
+        if (!f.length) return;
+        const first = f[0], last = f[f.length - 1];
+        if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+        else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
     });
 }
 
@@ -2655,10 +2721,11 @@ function openPrestigeModal() {
     document.getElementById('prestigeBonusValue').textContent = state.pearlBonuses.value || 0;
     document.getElementById('prestigeBonusSpawn').textContent = state.pearlBonuses.spawn || 0;
     document.getElementById('prestigeBonusMulti').textContent = state.pearlBonuses.multi || 0;
-    modal.classList.add('show');
+    if (modal.classList.contains('show')) return;   // refresh (ex.: buyPearlBonus) sem re-focar
+    openModal(modal);
 }
 function closePrestigeModal() {
-    document.getElementById('prestigeModal')?.classList.remove('show');
+    closeModalEl(document.getElementById('prestigeModal'));
 }
 function doPrestige() {
     const gain = calcPearlsToGain();
@@ -2725,6 +2792,8 @@ function loadGame() {
             // Migração: se totalEarned não existe, estima por money + upgrades comprados
             totalEarned:  s.totalEarned ?? s.money ?? 0,
         };
+        // Blindagem: zona sempre dentro da faixa válida (evita ZONES[undefined] no boot)
+        state.currentZone = Math.max(0, Math.min(ZONES.length - 1, Math.floor(Number(state.currentZone) || 0)));
         return true;
     } catch { return false; }
 }
@@ -2735,7 +2804,7 @@ function resetGame() {
     localStorage.removeItem('angeloPescadorTutorialDone');
     state = {
         money: 0, totalFish: 0, currentZone: 0,
-        upgrades: { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0 },
+        upgrades: { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0, abyss: 0 },
         lastSave: Date.now(),
         achievements: {},
         _speciesCaught: {},
@@ -2780,12 +2849,51 @@ function exportSave() {
     } catch (e) { alert('Erro ao exportar o save.'); }
 }
 
+// Valida e saneia um save vindo de fonte externa (import). Coerção para números
+// finitos/não-negativos, clamp de zona, e limpeza das missões (fecha NaN-lock e XSS).
+function sanitizeSave(s) {
+    if (!s || typeof s !== 'object') return false;
+    if (!Number.isFinite(s.money)) return false;               // rejeita NaN/Infinity/ausente
+    const num = (v, d = 0) => (Number.isFinite(v) && v >= 0 ? v : d);
+    const int = (v, d = 0) => Math.max(0, Math.floor(num(v, d)));
+    s.money       = num(s.money);
+    s.totalFish   = int(s.totalFish);
+    s.totalEarned = num(s.totalEarned, s.money);
+    s.pearls      = int(s.pearls);
+    s.currentZone = Math.max(0, Math.min(ZONES.length - 1, Math.floor(num(s.currentZone))));
+    const clean = (obj, keys) => {
+        const out = {};
+        for (const k of keys) out[k] = int(obj && obj[k]);
+        return out;
+    };
+    s.upgrades     = clean(s.upgrades,     ['rod','bait','motor','hook','net','value','abyss']);
+    s.pearlBonuses = clean(s.pearlBonuses, ['value','spawn','multi']);
+    s.consumables  = clean(s.consumables,  ['extraBait','magnify','chronometer']);
+    if (!s.quests || typeof s.quests !== 'object' || !Array.isArray(s.quests.list)) {
+        s.quests = { date: '', list: [] };
+    } else {
+        s.quests.date = typeof s.quests.date === 'string' ? s.quests.date.slice(0, 20) : '';
+        s.quests.list = s.quests.list
+            .filter(q => q && typeof q === 'object')
+            .slice(0, 3)
+            .map(q => ({
+                id: String(q.id || ''), track: String(q.track || ''),
+                goal: Math.max(1, int(q.goal, 1)), progress: int(q.progress),
+                reward: int(q.reward),
+                desc: typeof q.desc === 'string' ? q.desc.slice(0, 120) : '',
+                done: !!q.done,
+            }));
+    }
+    return true;
+}
+
 function importSave() {
     const code = prompt('Cole aqui o código do save exportado:');
     if (!code) return;
+    if (code.length > 50000) { alert('Código muito grande — parece inválido.'); return; }
     try {
         const s = JSON.parse(decodeURIComponent(escape(atob(code.trim()))));
-        if (!s || typeof s !== 'object' || typeof s.money !== 'number') throw new Error('inválido');
+        if (!sanitizeSave(s)) throw new Error('inválido');
         localStorage.setItem(SAVE_KEY, JSON.stringify(s));
         location.reload();   // recarrega com o novo save aplicado
     } catch (e) { alert('Código inválido — confira se copiou o texto completo.'); }
@@ -2961,6 +3069,7 @@ function runFrame(now) {
 }
 
 function slowUpdate() {
+    if (document.hidden) return;   // sem varredura de DOM com a aba em segundo plano
     updateStats();
     updateUpgradeCards();
     updateConsumables();
@@ -2974,6 +3083,7 @@ function switchTab(tabId) {
         const active = t.dataset.tab === tabId;
         t.classList.toggle('active', active);
         t.setAttribute('aria-selected', active ? 'true' : 'false');
+        t.setAttribute('tabindex', active ? '0' : '-1');   // roving tabindex (APG)
         if (active) t.classList.remove('has-notification');
     });
     document.querySelectorAll('.tab-pane').forEach(p => {
@@ -3004,6 +3114,8 @@ function setupInput() {
             return;
         }
         if (e.ctrlKey || e.metaKey) return; // ignora outros atalhos com modificador
+        // Com um modal aberto, o teclado é do modal (foco/Escape), não do jogo
+        if (document.querySelector(MODAL_SEL)) return;
         if (e.code === 'KeyA' || e.code === 'ArrowLeft')  rt.keyState.left = true;
         if (e.code === 'KeyD' || e.code === 'ArrowRight') rt.keyState.right = true;
         if (e.code === 'KeyW' || e.code === 'ArrowUp')    { rt.keyState.up = true; e.preventDefault(); }
@@ -3083,27 +3195,37 @@ function init() {
     document.getElementById('exportBtn')?.addEventListener('click', exportSave);
     document.getElementById('importBtn')?.addEventListener('click', importSave);
     document.getElementById('closeTrophiesBtn')?.addEventListener('click', () => {
-        document.getElementById('trophiesModal').classList.remove('show');
+        closeModalEl(document.getElementById('trophiesModal'));
     });
     // Filtros do compêndio
     document.querySelectorAll('.comp-filter-btn').forEach(b => {
         b.addEventListener('click', () => setCompFilter(b.dataset.filter));
     });
-    // Sistema de abas
-    document.querySelectorAll('.panel-tab').forEach(tab => {
+    // Sistema de abas — clique + navegação por setas (padrão ARIA Tabs)
+    const tabEls = Array.from(document.querySelectorAll('.panel-tab'));
+    tabEls.forEach((tab, i) => {
         tab.addEventListener('click', () => switchTab(tab.dataset.tab));
+        tab.addEventListener('keydown', (e) => {
+            let ni = -1;
+            if (e.key === 'ArrowRight' || e.key === 'ArrowDown') ni = (i + 1) % tabEls.length;
+            else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') ni = (i - 1 + tabEls.length) % tabEls.length;
+            else if (e.key === 'Home') ni = 0;
+            else if (e.key === 'End') ni = tabEls.length - 1;
+            if (ni < 0) return;
+            e.preventDefault();
+            switchTab(tabEls[ni].dataset.tab);
+            tabEls[ni].focus();
+        });
     });
     // Tutorial
-    document.getElementById('tutorialOkBtn')?.addEventListener('click', () => {
-        document.getElementById('tutorialOverlay').classList.remove('show');
-        try { localStorage.setItem('angeloPescadorTutorialDone', '1'); } catch (e) {}
-    });
+    document.getElementById('tutorialOkBtn')?.addEventListener('click', dismissTutorial);
     // Fechar modal por backdrop
     document.querySelectorAll('.modal-backdrop').forEach(m => {
-        m.addEventListener('click', (e) => { if (e.target === m) m.classList.remove('show'); });
+        m.addEventListener('click', (e) => { if (e.target === m) closeModalEl(m); });
     });
 
     setupInput();
+    setupModalKeys();
     setupTouch();
     initRope();
     initSeaweed();
@@ -3126,7 +3248,9 @@ function init() {
 
     // Tutorial: aparece se nunca foi visto, independente do save existir ou não
     if (!localStorage.getItem('angeloPescadorTutorialDone')) {
-        document.getElementById('tutorialOverlay')?.classList.add('show');
+        const ov = document.getElementById('tutorialOverlay');
+        ov?.classList.add('show');
+        setTimeout(() => document.getElementById('tutorialOkBtn')?.focus(), 40);
     }
 
     // Som ambiente
@@ -3135,12 +3259,42 @@ function init() {
     // Offline earnings: enquanto a aba estiver oculta, calcula peixes pescados pela rede
     setupOfflineEarnings();
 
+    // Ganhos offline desde o último save (cobre fechar a aba/navegador, não só ocultar)
+    grantOfflineEarnings((Date.now() - (state.lastSave || Date.now())) / 1000);
+
+    // Poupa bateria: suspende o áudio quando a aba fica em segundo plano
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) SFX.suspend(); else SFX.resume();
+    });
+
     requestAnimationFrame(gameLoop);
 }
 
 // =================================================================
 // OFFLINE EARNINGS — calcula ganhos da rede enquanto aba estava oculta
 // =================================================================
+// Credita os peixes que a rede pescou durante um período ausente.
+function grantOfflineEarnings(elapsedSec) {
+    const rate = getPassiveRate();
+    if (elapsedSec < 30 || rate <= 0) return;
+    const minutes = elapsedSec / 60;
+    const fishesToCatch = Math.floor(rate * minutes);
+    if (fishesToCatch <= 0) return;
+    // Cap: máximo OFFLINE_CAP_MINUTES (8h) de pesca offline
+    const cappedFishes = Math.min(fishesToCatch, Math.floor(rate * OFFLINE_CAP_MINUTES));
+    let totalGain = 0;
+    for (let i = 0; i < cappedFishes; i++) {
+        const f = rollFish(bestUnlockedZone());
+        if (f) totalGain += sellFish(f);
+    }
+    if (totalGain > 0) {
+        showOfflineEarningsToast(cappedFishes, totalGain, elapsedSec);
+        SFX.offline();
+        updateStats();
+        saveGame();
+    }
+}
+
 function setupOfflineEarnings() {
     let hiddenAt = 0;
     document.addEventListener('visibilitychange', () => {
@@ -3150,25 +3304,7 @@ function setupOfflineEarnings() {
         } else if (hiddenAt > 0) {
             const elapsedSec = (Date.now() - hiddenAt) / 1000;
             hiddenAt = 0;
-            // Apenas se passou >30s e tem rede
-            const rate = getPassiveRate();
-            if (elapsedSec < 30 || rate <= 0) return;
-            const minutes = elapsedSec / 60;
-            const fishesToCatch = Math.floor(rate * minutes);
-            if (fishesToCatch <= 0) return;
-            // Cap: máximo 8h de offline
-            const cappedFishes = Math.min(fishesToCatch, Math.floor(rate * 60 * 8));
-            let totalGain = 0;
-            for (let i = 0; i < cappedFishes; i++) {
-                const f = rollFish(bestUnlockedZone());
-                if (f) totalGain += sellFish(f);
-            }
-            if (totalGain > 0) {
-                showOfflineEarningsToast(cappedFishes, totalGain, elapsedSec);
-                SFX.offline();
-                updateStats();
-                saveGame();
-            }
+            grantOfflineEarnings(elapsedSec);
         }
     });
 }
@@ -3193,44 +3329,19 @@ function showOfflineEarningsToast(fishes, gain, elapsedSec) {
 // =================================================================
 // SOM AMBIENTE — ruído de mar gerado por Web Audio
 // =================================================================
-let _ambientStarted = false;
+// Inicia a ambiência do mar no 1º gesto do usuário, usando a ÚNICA fonte de áudio
+// (SFX.ambience), que respeita o mute. Antes havia um segundo gerador independente
+// que dobrava o volume e ignorava o botão de som.
 function setupAmbientSound() {
     const start = () => {
-        if (_ambientStarted) return;
-        try {
-            const ac = new (window.AudioContext || window.webkitAudioContext)();
-            const buf = ac.createBuffer(1, ac.sampleRate * 2, ac.sampleRate);
-            const data = buf.getChannelData(0);
-            for (let i = 0; i < data.length; i++) {
-                // ruído rosa filtrado — efeito de ondas
-                data[i] = (Math.random() * 2 - 1) * 0.3;
-            }
-            const src = ac.createBufferSource();
-            src.buffer = buf;
-            src.loop = true;
-            const filter = ac.createBiquadFilter();
-            filter.type = 'lowpass';
-            filter.frequency.setValueAtTime(420, ac.currentTime);
-            const gain = ac.createGain();
-            gain.gain.setValueAtTime(0.08, ac.currentTime);
-            // LFO leve no volume — efeito de ondas
-            const lfo = ac.createOscillator();
-            lfo.frequency.setValueAtTime(0.2, ac.currentTime);
-            const lfoGain = ac.createGain();
-            lfoGain.gain.setValueAtTime(0.04, ac.currentTime);
-            lfo.connect(lfoGain).connect(gain.gain);
-            src.connect(filter).connect(gain).connect(ac.destination);
-            src.start(); lfo.start();
-            _ambientStarted = true;
-        } catch (e) {}
+        SFX.ambience();
         document.removeEventListener('click', start);
         document.removeEventListener('keydown', start);
         document.removeEventListener('touchstart', start);
     };
-    // Web Audio só pode iniciar após interação do usuário
-    document.addEventListener('click', start, { once: false });
-    document.addEventListener('keydown', start, { once: false });
-    document.addEventListener('touchstart', start, { once: false });
+    document.addEventListener('click', start);
+    document.addEventListener('keydown', start);
+    document.addEventListener('touchstart', start);
 }
 
 document.addEventListener('DOMContentLoaded', init);

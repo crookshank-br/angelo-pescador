@@ -67,7 +67,7 @@
                 <div class="stats">
                     <div class="stat-card money">
                         <span class="stat-label">Dinheiro</span>
-                        <span class="stat-value" id="money" aria-live="polite">$0</span>
+                        <span class="stat-value" id="money">$0</span>
                     </div>
                     <div class="stat-card">
                         <span class="stat-label">Total Pescado</span>
@@ -91,16 +91,16 @@
             </header>
 
             <!-- ABAS -->
-            <nav class="panel-tabs" role="tablist">
-                <button class="panel-tab active" data-tab="fish" role="tab" aria-selected="true">🎣 Pescaria</button>
-                <button class="panel-tab"        data-tab="quests" role="tab">📋 Missões</button>
-                <button class="panel-tab"        data-tab="dex" role="tab">📚 Espécies</button>
-                <button class="panel-tab"        data-tab="log" role="tab">📜 Diário</button>
+            <nav class="panel-tabs" role="tablist" aria-label="Painéis de gerenciamento">
+                <button class="panel-tab active" data-tab="fish"   id="tab-fish"   role="tab" aria-selected="true"  aria-controls="pane-fish">🎣 Pescaria</button>
+                <button class="panel-tab"        data-tab="quests" id="tab-quests" role="tab" aria-selected="false" aria-controls="pane-quests" tabindex="-1">📋 Missões</button>
+                <button class="panel-tab"        data-tab="dex"    id="tab-dex"    role="tab" aria-selected="false" aria-controls="pane-dex" tabindex="-1">📚 Espécies</button>
+                <button class="panel-tab"        data-tab="log"    id="tab-log"    role="tab" aria-selected="false" aria-controls="pane-log" tabindex="-1">📜 Diário</button>
             </nav>
 
             <div class="panel-tabs-content">
                 <!-- TAB: PESCARIA (zonas + melhorias + loja) -->
-                <div class="tab-pane active" data-pane="fish" role="tabpanel">
+                <div class="tab-pane active" data-pane="fish" id="pane-fish" role="tabpanel" aria-labelledby="tab-fish">
                     <div class="zone-selector">
                         <h3>Explorar Zonas</h3>
                         <div class="zones-grid" id="zonesGrid"></div>
@@ -118,7 +118,7 @@
                 </div>
 
                 <!-- TAB: MISSÕES -->
-                <div class="tab-pane" data-pane="quests" role="tabpanel">
+                <div class="tab-pane" data-pane="quests" id="pane-quests" role="tabpanel" aria-labelledby="tab-quests">
                     <div class="quests-section">
                         <h3>Missões Diárias <span class="quest-reset-info" id="questResetInfo"></span></h3>
                         <div class="quests-list" id="questsList"></div>
@@ -126,7 +126,7 @@
                 </div>
 
                 <!-- TAB: COMPÊNDIO -->
-                <div class="tab-pane" data-pane="dex" role="tabpanel">
+                <div class="tab-pane" data-pane="dex" id="pane-dex" role="tabpanel" aria-labelledby="tab-dex">
                     <div class="compendium-section">
                         <h3>
                             Compêndio
@@ -142,7 +142,7 @@
                 </div>
 
                 <!-- TAB: DIÁRIO -->
-                <div class="tab-pane" data-pane="log" role="tabpanel">
+                <div class="tab-pane" data-pane="log" id="pane-log" role="tabpanel" aria-labelledby="tab-log">
                     <div class="log-panel log-panel-tabbed">
                         <h3>Diário do Pescador</h3>
                         <ul id="fishingLog" aria-live="polite" aria-atomic="false"></ul>
@@ -228,9 +228,9 @@
     </div>
 
     <!-- TUTORIAL OVERLAY -->
-    <div class="tutorial-overlay" id="tutorialOverlay" role="dialog" aria-modal="true">
+    <div class="tutorial-overlay" id="tutorialOverlay" role="dialog" aria-modal="true" aria-labelledby="tutorialTitle">
         <div class="tutorial-card">
-            <h2>🎣 Bem-vindo, pescador!</h2>
+            <h2 id="tutorialTitle">🎣 Bem-vindo, pescador!</h2>
             <ol class="tutorial-steps">
                 <li><strong>Lance o anzol</strong> com <kbd>ESPAÇO</kbd> ou clicando no botão azul.</li>
                 <li><strong>Mova o anzol</strong> com <kbd>WASD</kbd> ou setas para perseguir os peixes.</li>
