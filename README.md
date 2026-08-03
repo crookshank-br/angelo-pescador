@@ -16,9 +16,14 @@ Também funciona **offline** depois do primeiro acesso (PWA / Service Worker).
 ## ✨ Destaques técnicos
 
 - Renderização Canvas 2D com escala por `devicePixelRatio`
+- Personagem e barco 100% vetoriais em canvas (sem sprites): cachos animados,
+  piscada periódica, respiração e comemoração ao fisgar
+- Cena em camadas com paralaxe: silhuetas de fundo, cardumes, terreno e vinheta
 - Física de corda via integração de Verlet (26 segmentos)
 - Sistema de partículas (splash + brilhos) + textos flutuantes de dinheiro
-- Cáusticos de água com `globalCompositeOperation: 'screen'`
+- Cáusticos de água com `globalCompositeOperation: 'screen'` + caminho de brilho do sol
+- Campo de estrelas pré-renderizado e `shadowBlur` restrito a épicos/lendários
+  (custo de render controlado no tablet)
 - UI em glassmorphism (backdrop-filter)
 - Economia exponencial com rebalanceamento por raridade
 - Save/load via `localStorage` + exportar/importar entre aparelhos
