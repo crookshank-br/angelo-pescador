@@ -580,7 +580,13 @@ function sellFish(f) {
 // CANVAS
 // =================================================================
 const canvas = document.getElementById('gameCanvas');
-const ctx = canvas.getContext('2d', { alpha: false });   // perf: sem alpha (canvas sempre cheio)
+// 'let' porque o pipeline de pós-processamento redireciona o desenho para
+// camadas offscreen por alguns instantes do frame (ver renderScene).
+let ctx = canvas.getContext('2d', { alpha: false });   // perf: sem alpha (canvas sempre cheio)
+const ctxScreen = ctx;                                  // referência fixa ao canvas visível
+
+// ctx.filter (blur nativo) não existe em browsers antigos — degrada sem quebrar
+const HAS_CTX_FILTER = typeof ctx.filter === 'string';
 let cw = 0, ch = 0;
 
 // Cache de elementos DOM acessados em hot paths
@@ -598,14 +604,29 @@ function cacheDOM() {
     DOM.catchShowcase = document.getElementById('catchShowcase');
 }
 
+// Escala de render efetiva. Em telas densas o custo dos passes de
+// pós-processamento é proporcional ao número de pixels, e a arte é cartoon —
+// acima de ~1.25x no tablet o ganho visual não paga o custo.
+let renderDpr = 1;
+
+function computeRenderDpr(rect) {
+    const cap = IS_COARSE ? 1.25 : 2;
+    let dpr = Math.min(cap, window.devicePixelRatio || 1);
+    const px = rect.width * rect.height * dpr * dpr;
+    const MAX_PX = 1.6e6;                      // teto absoluto de pixels por frame
+    if (px > MAX_PX) dpr *= Math.sqrt(MAX_PX / px);
+    return Math.max(0.8, dpr);
+}
+
 function resizeCanvas() {
     const r = canvas.parentElement.getBoundingClientRect();
-    const dpr = Math.min(2, window.devicePixelRatio || 1);
-    canvas.width  = Math.round(r.width  * dpr);
-    canvas.height = Math.round(r.height * dpr);
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    renderDpr = computeRenderDpr(r);
+    canvas.width  = Math.round(r.width  * renderDpr);
+    canvas.height = Math.round(r.height * renderDpr);
+    ctx.setTransform(renderDpr, 0, 0, renderDpr, 0, 0);
     cw = r.width;
     ch = r.height;
+    rt.fx = null;                              // camadas offscreen viram lixo no resize
 }
 
 function waterY()       { return ch * 0.22; }
@@ -1051,6 +1072,9 @@ function drawBackdrop(t) {
     const tints = ['rgba(18, 78, 122, 0.35)', 'rgba(10, 58, 96, 0.40)',
                    'rgba(6, 38, 66, 0.45)',  'rgba(3, 14, 28, 0.55)'];
 
+    // Profundidade de campo: o que está longe sai de foco
+    if (HAS_CTX_FILTER) ctx.filter = 'blur(3px)';
+
     for (let layer = 0; layer < 2; layer++) {
         const drift = Math.sin(t * 0.00008 + layer) * 18;
         const h = (layer === 0 ? 130 : 78);
@@ -1069,6 +1093,7 @@ function drawBackdrop(t) {
         ctx.fill();
     }
     ctx.globalAlpha = 1;
+    if (HAS_CTX_FILTER) ctx.filter = 'none';
 }
 
 function drawDepthFog() {
@@ -1106,13 +1131,16 @@ function drawTerrain(t) {
     fg.addColorStop(1, bot);
     ctx.fillStyle = fg;
     ctx.beginPath();
-    ctx.moveTo(0, bottom);
+    // A borda inferior vai ate ch, nao ate `bottom`: waterHeight() reserva 110px
+    // para a area dos controles, e parar em `bottom` deixava a areia flutuando
+    // com agua lisa embaixo.
+    ctx.moveTo(0, ch);
     for (let x = 0; x <= cw; x += 20) {
         const h = bottom - floorH + Math.sin(x * 0.015 + t * 0.0003) * 8
                 + Math.sin(x * 0.04) * 4;
         ctx.lineTo(x, h);
     }
-    ctx.lineTo(cw, bottom);
+    ctx.lineTo(cw, ch);
     ctx.closePath();
     ctx.fill();
 
@@ -2116,6 +2144,142 @@ function drawBoat(t) {
         ctx.globalAlpha = 1;
     }
 
+    ctx.restore();
+}
+
+// =================================================================
+// PÓS-PROCESSAMENTO — óptica da água (refração · bloom · color grade)
+// Tudo em canvas 2D puro, sem dependências.
+// =================================================================
+
+// Camadas offscreen reaproveitadas entre frames (recriadas só no resize)
+function getFxLayer(name, scale = 1) {
+    if (!rt.fx) rt.fx = {};
+    const dpr = renderDpr;
+    const w = Math.max(1, Math.round(cw * scale * dpr));
+    const h = Math.max(1, Math.round(ch * scale * dpr));
+    let L = rt.fx[name];
+    if (!L || L.w !== w || L.h !== h) {
+        const c = document.createElement('canvas');
+        c.width = w; c.height = h;
+        L = { w, h, dpr, scale, canvas: c, ctx: c.getContext('2d') };
+        rt.fx[name] = L;
+    }
+    // Mesma escala lógica do canvas principal: as funções de desenho não mudam
+    L.ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);
+    return L;
+}
+
+// Desenha `fn` numa camada offscreen limpa em vez de na tela
+function drawToLayer(layer, fn) {
+    const prev = ctx;
+    layer.ctx.save();
+    layer.ctx.setTransform(1, 0, 0, 1, 0, 0);
+    layer.ctx.clearRect(0, 0, layer.w, layer.h);
+    layer.ctx.restore();
+    ctx = layer.ctx;
+    try { fn(); } finally { ctx = prev; }
+}
+
+// QUALIDADE ADAPTATIVA — o custo dos passes é proporcional aos pixels, e não dá
+// pra saber de antemão o que o aparelho aguenta. Em vez de chutar, mede: se o
+// frame estourar o orçamento de forma sustentada, derruba um nível (bloom sai
+// primeiro, refração depois); se sobrar folga por bastante tempo, volta a subir.
+const FX_FULL = 2, FX_NO_BLOOM = 1, FX_MINIMO = 0;
+const fxQ = { level: FX_FULL, slow: 0, fast: 0 };
+
+function updateFxQuality(delta) {
+    // delta já vem limitado a 50ms no gameLoop, então trocas de aba não contam
+    if (delta > 21) { fxQ.slow++; fxQ.fast = 0; }
+    else if (delta < 15) { fxQ.fast++; fxQ.slow = 0; }
+
+    if (fxQ.slow >= 45 && fxQ.level > FX_MINIMO) {        // ~0.75s ruim → desce
+        fxQ.level--; fxQ.slow = 0; fxQ.fast = 0;
+    } else if (fxQ.fast >= 900 && fxQ.level < FX_FULL) {  // ~15s folgado → sobe
+        fxQ.level++; fxQ.slow = 0; fxQ.fast = 0;
+    }
+}
+// REFRAÇÃO: recola a cena submersa em fatias horizontais deslocadas por
+// senoides. É o que faz a água "ondular" de verdade sobre tudo que está
+// dentro dela. Amplitude pequena (<3px) pra não atrapalhar a mira do anzol.
+function blitRefracted(layer, t) {
+    const wy = waterY();
+    const dpr = layer.dpr;
+
+    if (REDUCED_MOTION || fxQ.level <= FX_MINIMO) {
+        ctx.drawImage(layer.canvas, 0, 0, layer.w, layer.h, 0, 0, cw, ch);
+        return;
+    }
+
+    // Acima da linha d'água não há distorção (céu/barco ficam nítidos)
+    if (wy > 0) {
+        ctx.drawImage(layer.canvas, 0, 0, layer.w, Math.round(wy * dpr),
+                                    0, 0, cw, wy);
+    }
+
+    const sliceH = IS_COARSE ? 8 : 4;    // fatias maiores no tablet: menos draw calls
+    const amp = 2.6;
+    const OVER = 5;                       // sobra lateral pra não abrir fresta na borda
+
+    for (let y = wy; y < ch; y += sliceH) {
+        const h = Math.min(sliceH, ch - y);
+        const depth = (y - wy) / Math.max(1, ch - wy);
+        // A ondulação nasce na superfície e se acalma no fundo
+        const a = amp * (1 - depth * 0.55);
+        const dx = Math.sin(y * 0.045 + t * 0.0016) * a
+                 + Math.sin(y * 0.110 - t * 0.0027) * a * 0.45;
+        ctx.drawImage(layer.canvas,
+            0, Math.round(y * dpr), layer.w, Math.max(1, Math.round(h * dpr)),
+            dx - OVER, y, cw + OVER * 2, h);
+    }
+}
+
+// BLOOM: destaca as altas luzes (sol, lendários, bioluminescência).
+// O "threshold" é aproximado multiplicando a cena por ela mesma — isso
+// esmaga os tons médios e preserva o que já era claro.
+function applyBloom() {
+    if (!HAS_CTX_FILTER || REDUCED_MOTION || fxQ.level < FX_FULL) return;
+    const B = getFxLayer('bloom', 0.25);
+    const bc = B.ctx;
+
+    bc.save();
+    bc.setTransform(1, 0, 0, 1, 0, 0);
+    bc.globalCompositeOperation = 'source-over';
+    bc.filter = 'none';
+    bc.clearRect(0, 0, B.w, B.h);
+    bc.drawImage(canvas, 0, 0, B.w, B.h);
+    bc.globalCompositeOperation = 'multiply';
+    bc.drawImage(B.canvas, 0, 0);          // ² → corta os médios
+    bc.drawImage(B.canvas, 0, 0);          // ⁴ → só sobram as altas luzes
+    bc.restore();
+
+    ctx.save();
+    ctx.setTransform(B.dpr, 0, 0, B.dpr, 0, 0);   // sem camera shake: alinha com o que foi capturado
+    ctx.globalCompositeOperation = 'screen';
+    ctx.globalAlpha = 0.48;   // acima disso a agua perde contraste
+    ctx.filter = 'blur(7px)';
+    ctx.drawImage(B.canvas, 0, 0, B.w, B.h, 0, 0, cw, ch);
+    ctx.filter = 'none';
+    ctx.restore();
+}
+
+// COLOR GRADING: unifica a paleta de cada zona (quente na costa, frio no fundo)
+// Tinta por zona. Alphas baixos porque 'source-over' e uma lavagem chapada —
+// mais forte que 'overlay' na mesma opacidade.
+const ZONE_GRADE = [
+    'rgba(255, 186, 104, 0.055)',   // Costa: sol quente
+    'rgba(255, 162, 86,  0.045)',   // Arrecifes
+    'rgba(44, 110, 186,  0.060)',   // Mar Aberto: esfria
+    'rgba(24, 56, 130,   0.090)',   // Fossa: azul profundo
+];
+
+function applyColorGrade() {
+    ctx.save();
+    ctx.setTransform(renderDpr, 0, 0, renderDpr, 0, 0);   // cobre a tela toda, sem sobrar borda no shake
+    // 'source-over' em vez de 'overlay': mesmo efeito de tinta a baixa opacidade
+    // por ~1/5 do custo (medido em 1125x1920: 0.97ms vs 4.66ms)
+    ctx.fillStyle = ZONE_GRADE[state.currentZone];
+    ctx.fillRect(0, 0, cw, ch);
     ctx.restore();
 }
 
@@ -3655,6 +3819,7 @@ function gameLoop(now) {
 function runFrame(now) {
     const delta = Math.min(50, now - lastFrame);
     lastFrame = now;
+    updateFxQuality(delta);
 
     // Pausa
     if (rt.paused) {
@@ -3715,21 +3880,30 @@ function runFrame(now) {
         ctx.translate(sx, sy);
     }
 
+    // ── ACIMA DA ÁGUA (nítido) ──────────────────────────────────
     drawSky(rt.time);
     if (state.currentZone < 3) drawSun(rt.time);
     drawClouds(rt.time);
     drawWater(rt.time);
-    drawCaustics(rt.time);
-    drawBackdrop(rt.time);
-    drawTerrain(rt.time);
 
-    // Peixes (já estão ordenados por size desde o spawn)
-    for (const f of rt.activeFish) drawFish(f);
+    // ── SUBMERSO (vai pra uma camada própria e volta refratado) ──
+    // Só o conteúdo dentro d'água entra aqui; a superfície e o que está
+    // acima dela continuam nítidos.
+    const underwater = getFxLayer('underwater');
+    drawToLayer(underwater, () => {
+        drawCaustics(rt.time);
+        drawBackdrop(rt.time);
+        drawTerrain(rt.time);
+        // Peixes (já estão ordenados por size desde o spawn)
+        for (const f of rt.activeFish) drawFish(f);
+        drawSeaweed(rt.time);
+        drawTrails();
+    });
+    blitRefracted(underwater, rt.time);
 
-    drawSeaweed(rt.time);     // antes do fog para que algas em zonas profundas desbotem
-    drawTrails();
-    drawDepthFog();
-    drawChests(rt.time);
+    // ── DE VOLTA NA TELA ────────────────────────────────────────
+    drawDepthFog();           // escurece água e conteúdo juntos, como antes
+    drawChests(rt.time);      // interativos: ficam nítidos
     drawAmbient();
     drawBubbles();
     drawBoat(rt.time);
@@ -3742,6 +3916,10 @@ function runFrame(now) {
 
     drawParticles();
     drawFloatTexts();
+
+    // Passes de pós-processamento (ordem importa: bloom antes da cor)
+    applyBloom();
+    applyColorGrade();
 
     // Vinheta — foca o olhar no centro da cena
     if (!rt.vignette || rt.vignette.w !== cw || rt.vignette.h !== ch) {

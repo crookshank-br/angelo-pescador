@@ -22,6 +22,13 @@ Também funciona **offline** depois do primeiro acesso (PWA / Service Worker).
 - Física de corda via integração de Verlet (26 segmentos)
 - Sistema de partículas (splash + brilhos) + textos flutuantes de dinheiro
 - Cáusticos de água com `globalCompositeOperation: 'screen'` + caminho de brilho do sol
+- Pós-processamento em canvas 2D puro: refração da água (a cena submersa é
+  recomposta em fatias deslocadas por senoides), bloom com threshold aproximado,
+  profundidade de campo e color grading por zona
+- Qualidade adaptativa: mede o tempo de frame e derruba os passes caros
+  automaticamente em aparelho fraco (bloom primeiro, refração depois)
+- Teto de resolução de render (1.6 Mpx / 1.25x em touch) — o custo dos passes é
+  proporcional aos pixels
 - Campo de estrelas pré-renderizado e `shadowBlur` restrito a épicos/lendários
   (custo de render controlado no tablet)
 - UI em glassmorphism (backdrop-filter)

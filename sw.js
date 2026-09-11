@@ -1,5 +1,5 @@
 // Versão atualizada a cada deploy — bumpa quando os arquivos mudam.
-const VERSION = 'v3.5-visual-angelo-2026.08.03';
+const VERSION = 'v3.6-optica-agua-2026.09.11';
 const CACHE = `angelo-pescador-${VERSION}`;
 const ASSETS = [
     './',
