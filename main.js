@@ -1145,6 +1145,13 @@ function drawTerrain(t) {
     ctx.closePath();
     ctx.fill();
 
+    // Grão de areia dentro do recorte do fundo
+    ctx.save();
+    ctx.clip();
+    fillTexture('sand', 0, bottom - floorH - 20, cw, ch - bottom + floorH + 20,
+                zone < 2 ? 0.85 : 0.35);
+    ctx.restore();
+
     // Detalhes por zona
     if (zone === 0) {
         // Conchas e pedrinhas
@@ -1332,6 +1339,113 @@ function updateFish(delta) {
             if (rt.fishingActive) rt.combo = 0;
         }
     }
+}
+
+// =================================================================
+// TEXTURAS PROCEDURAIS
+//
+// O visual liso é o que faz a cena ler como "vetor chapado" em vez de
+// material. Madeira tem veio, areia tem grão, tecido tem trama. Cada
+// textura é gerada uma vez num canvas offscreen e virada padrão (pattern),
+// então aplicar custa um fill por superfície — não importa quanta
+// informação tenha dentro.
+// =================================================================
+
+const TEXTURES = {};
+
+// Desenha numa textura offscreen usando as mesmas funções de canvas
+function texCanvas(w, h, draw) {
+    const c = document.createElement('canvas');
+    c.width = w; c.height = h;
+    const prev = ctx;
+    ctx = c.getContext('2d');
+    try { draw(w, h); } finally { ctx = prev; }
+    return c;
+}
+
+// Veio de madeira: linhas onduladas atravessando a tábua + alguns nós.
+// As senoides usam período que divide a largura, então o padrão emenda.
+function makeWoodTexture(w, h) {
+    for (let i = 0; i < 46; i++) {
+        const y = (i / 46) * h + (Math.sin(i * 12.9898) * 0.5 + 0.5) * 2;
+        const amp = 0.8 + (Math.sin(i * 4.1) * 0.5 + 0.5) * 2.6;
+        const k = 1 + (i % 3);
+        const escuro = i % 4 !== 0;
+        ctx.strokeStyle = escuro
+            ? 'rgba(58, 28, 10, ' + (0.05 + (i % 5) * 0.022) + ')'
+            : 'rgba(255, 222, 180, ' + (0.04 + (i % 3) * 0.018) + ')';
+        ctx.lineWidth = 0.6 + (i % 4) * 0.45;
+        ctx.beginPath();
+        for (let x = 0; x <= w; x += 4) {
+            const yy = y + Math.sin((x / w) * Math.PI * 2 * k + i) * amp;
+            if (x === 0) ctx.moveTo(x, yy); else ctx.lineTo(x, yy);
+        }
+        ctx.stroke();
+    }
+
+    // Nós da madeira: anéis concêntricos
+    for (const [kx, ky, kr] of [[w * 0.22, h * 0.38, 5], [w * 0.68, h * 0.7, 4]]) {
+        for (let r = kr; r > 0; r -= 1.1) {
+            ctx.strokeStyle = 'rgba(52, 24, 8, ' + (0.05 + (kr - r) * 0.016) + ')';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.ellipse(kx, ky, r * 1.7, r, 0, 0, Math.PI * 2);
+            ctx.stroke();
+        }
+    }
+}
+
+// Grão de areia: respingos claros e escuros
+function makeSandTexture(w, h) {
+    // Hash com seeds bem separadas: usar sin(i*a) e sin(i*b) direto correlaciona
+    // os dois eixos e os respingos saem em faixas horizontais.
+    const hash = (n) => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
+    for (let i = 0; i < 900; i++) {
+        const px = hash(i * 1.0 + 0.13) * w;
+        const py = hash(i * 2.7 + 91.7) * h;
+        const claro = i % 3 !== 0;
+        ctx.fillStyle = claro ? 'rgba(255, 244, 218, 0.13)' : 'rgba(82, 62, 38, 0.13)';
+        ctx.beginPath();
+        ctx.arc(px, py, 0.4 + (i % 4) * 0.32, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+// Trama de tecido: hachura cruzada bem fina
+function makeFabricTexture(w, h) {
+    ctx.lineWidth = 0.7;
+    for (let i = -h; i < w + h; i += 3) {
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)';
+        ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i + h, h); ctx.stroke();
+        ctx.strokeStyle = 'rgba(0,0,0,0.05)';
+        ctx.beginPath(); ctx.moveTo(i, h); ctx.lineTo(i + h, 0); ctx.stroke();
+    }
+}
+
+const TEX_MAKERS = {
+    wood:   [256, 72,  makeWoodTexture],
+    sand:   [128, 128, makeSandTexture],
+    fabric: [24,  24,  makeFabricTexture],
+};
+
+function getTexture(name) {
+    if (TEXTURES[name]) return TEXTURES[name];
+    const spec = TEX_MAKERS[name];
+    if (!spec) return null;
+    const src = texCanvas(spec[0], spec[1], spec[2]);
+    TEXTURES[name] = { canvas: src, pattern: ctx.createPattern(src, 'repeat') };
+    return TEXTURES[name];
+}
+
+// Aplica uma textura sobre o que já está desenhado, dentro do recorte atual
+function fillTexture(name, x, y, w, h, alpha) {
+    const tex = getTexture(name);
+    if (!tex) return;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = tex.pattern;
+    ctx.fillRect(x, y, w, h);
+    ctx.restore();
 }
 
 // =================================================================
@@ -1963,17 +2077,49 @@ function drawAngelo(t, cheer) {
     ctx.quadraticCurveTo(0, 3, -12, 0);
     ctx.closePath();
     ctx.fill();
-    // mangas
+
+    // Trama do tecido + vincos, confinados ao corpo da camiseta
+    ctx.save();
+    ctx.clip();
+    fillTexture('fabric', -18, -30, 36, 34, 0.85);
+    // vincos: sombra puxando do ombro pro quadril
+    ctx.strokeStyle = 'rgba(70, 76, 84, 0.30)';
+    ctx.lineWidth = 1.6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(-8, -22); ctx.quadraticCurveTo(-5, -12, -8.5, -2);
+    ctx.moveTo( 7, -21); ctx.quadraticCurveTo( 4, -11, 7.5, -2);
+    ctx.moveTo( 0, -14); ctx.quadraticCurveTo( 2, -8, 0.5, -1);
+    ctx.stroke();
+    // luz caindo do ombro direito
+    const shl = ctx.createLinearGradient(-14, -26, 6, -6);
+    shl.addColorStop(0, 'rgba(255,255,255,0.20)');
+    shl.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = shl;
+    ctx.fillRect(-18, -30, 36, 34);
+    ctx.restore();
+
+    // mangas (com sombra na dobra)
     ctx.fillStyle = SHIRT;
     rrect(-17, -24, 8, 11, 3.5); ctx.fill();
     rrect(  9, -24, 8, 11, 3.5); ctx.fill();
-    // dobra da barra + gola
+    ctx.strokeStyle = 'rgba(70, 76, 84, 0.35)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(-16.5, -14); ctx.lineTo(-9.5, -14);
+    ctx.moveTo(  9.5, -14); ctx.lineTo( 16.5, -14);
+    ctx.stroke();
+
+    // dobra da barra + gola canelada
     ctx.strokeStyle = 'rgba(255,255,255,0.22)';
     ctx.lineWidth = 1.2;
     ctx.beginPath(); ctx.moveTo(-11, -4); ctx.quadraticCurveTo(0, -1.5, 11, -4); ctx.stroke();
     ctx.strokeStyle = 'rgba(60,66,72,0.55)';
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 2.4;
     ctx.beginPath(); ctx.arc(0, -26, 5.5, 0.25, Math.PI - 0.25); ctx.stroke();
+    ctx.strokeStyle = 'rgba(190,196,202,0.55)';
+    ctx.lineWidth = 0.9;
+    ctx.beginPath(); ctx.arc(0, -26.9, 5.5, 0.30, Math.PI - 0.30); ctx.stroke();
 
     // ── PESCOÇO + CABEÇA ────────────────────────────────────────
     const headY = -42, headRX = 13, headRY = 14;
@@ -1981,6 +2127,8 @@ function drawAngelo(t, cheer) {
 
     ctx.fillStyle = SKIN_DARK;
     rrect(-4, -31, 8, 7, 3); ctx.fill();
+    ctx.fillStyle = 'rgba(150, 98, 58, 0.45)';   // sombra projetada do queixo
+    rrect(-4, -31, 8, 3, 1.5); ctx.fill();
 
     ctx.save();
     ctx.translate(0, nod);
@@ -2000,6 +2148,24 @@ function drawAngelo(t, cheer) {
     ctx.beginPath();
     ctx.ellipse(0, headY, headRX, headRY, 0, 0, Math.PI * 2);
     ctx.fill();
+
+    // Modelagem do rosto antes do cabelo: sombra do queixo e das maçãs
+    ctx.save();
+    ctx.beginPath();
+    ctx.ellipse(0, headY, headRX, headRY, 0, 0, Math.PI * 2);
+    ctx.clip();
+    const chin = ctx.createLinearGradient(0, headY + headRY * 0.25, 0, headY + headRY);
+    chin.addColorStop(0, 'rgba(176, 122, 76, 0)');
+    chin.addColorStop(1, 'rgba(176, 122, 76, 0.26)');
+    ctx.fillStyle = chin;
+    ctx.fillRect(-headRX, headY, headRX * 2, headRY);
+    // sombra que o cabelo joga na testa
+    const brow = ctx.createLinearGradient(0, headY - headRY, 0, headY - headRY * 0.25);
+    brow.addColorStop(0, 'rgba(126, 84, 50, 0.26)');
+    brow.addColorStop(1, 'rgba(120, 78, 46, 0)');
+    ctx.fillStyle = brow;
+    ctx.fillRect(-headRX, headY - headRY, headRX * 2, headRY);
+    ctx.restore();
 
     drawCurlyHair(0, headY - 11, headRX, headRY, t);
 
@@ -2041,8 +2207,13 @@ function drawAngelo(t, cheer) {
     ctx.stroke();
 
     // narizinho
+    ctx.fillStyle = 'rgba(190, 132, 84, 0.40)';
+    ctx.beginPath();
+    ctx.ellipse(2.4, headY + 2.2, 1.6, 2.6, 0.25, 0, Math.PI * 2);
+    ctx.fill();
     ctx.strokeStyle = SKIN_DARK;
     ctx.lineWidth = 1.4;
+    ctx.lineCap = 'round';
     ctx.beginPath();
     ctx.arc(1.5, headY + 3.5, 1.8, Math.PI * 0.15, Math.PI * 0.85);
     ctx.stroke();
@@ -2124,12 +2295,24 @@ function drawBoat(t) {
     hullPath(HULL_W, HULL_H);
     ctx.fillStyle = hg;
     ctx.fill();
+    ctx.save();
+    hullPath(HULL_W, HULL_H);
+    ctx.clip();
+    fillTexture('wood', -HULL_W, -HULL_H, HULL_W * 2, HULL_H * 2, 0.9);
+    ctx.restore();
 
     // interior sombreado (o barco é aberto — dá pra ver o Angelo dentro)
     ctx.save();
     hullPath(HULL_W, HULL_H);
     ctx.clip();
     ctx.fillStyle = '#5C3218';
+    ctx.fillRect(-HULL_W, -HULL_H / 2, HULL_W * 2, HULL_H / 2 - 2);
+    fillTexture('wood', -HULL_W, -HULL_H / 2, HULL_W * 2, HULL_H / 2 - 2, 0.7);
+    // luz entrando por cima da amurada
+    const inn = ctx.createLinearGradient(0, -HULL_H / 2, 0, -2);
+    inn.addColorStop(0, 'rgba(255, 214, 160, 0.16)');
+    inn.addColorStop(1, 'rgba(0, 0, 0, 0.22)');
+    ctx.fillStyle = inn;
     ctx.fillRect(-HULL_W, -HULL_H / 2, HULL_W * 2, HULL_H / 2 - 2);
     ctx.restore();
 
@@ -2149,13 +2332,25 @@ function drawBoat(t) {
     fw.addColorStop(1,   '#48240F');
     ctx.fillStyle = fw;
     ctx.fillRect(-HULL_W, -2, HULL_W * 2, HULL_H);
-    // tábuas
-    ctx.strokeStyle = 'rgba(40, 18, 6, 0.30)';
-    ctx.lineWidth = 1;
+    fillTexture('wood', -HULL_W, -2, HULL_W * 2, HULL_H, 0.95);
+    // tábuas com calafetagem: sulco escuro + fio de luz embaixo
     for (const ly of [5, 12, 18]) {
+        ctx.strokeStyle = 'rgba(34, 14, 4, 0.42)';
+        ctx.lineWidth = 1.3;
         ctx.beginPath();
         ctx.moveTo(-HULL_W / 2, ly); ctx.lineTo(HULL_W / 2, ly); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255, 216, 172, 0.16)';
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(-HULL_W / 2, ly + 1.2); ctx.lineTo(HULL_W / 2, ly + 1.2); ctx.stroke();
     }
+
+    // Mancha da linha d'água — o casco encardido onde bate a água
+    const stain = ctx.createLinearGradient(0, HULL_H / 2 - 14, 0, HULL_H / 2);
+    stain.addColorStop(0, 'rgba(30, 46, 38, 0)');
+    stain.addColorStop(1, 'rgba(30, 46, 38, 0.35)');
+    ctx.fillStyle = stain;
+    ctx.fillRect(-HULL_W / 2, HULL_H / 2 - 14, HULL_W, 16);
     // veios verticais
     ctx.strokeStyle = 'rgba(255, 220, 180, 0.10)';
     for (let i = -4; i <= 4; i++) {
@@ -2172,6 +2367,16 @@ function drawBoat(t) {
     ctx.strokeStyle = 'rgba(255, 240, 220, 0.5)';
     ctx.lineWidth = 1.6;
     ctx.beginPath(); hullTopEdge(HULL_W, HULL_H); ctx.stroke();
+
+    // Rebites de latão presos na amurada
+    for (let i = -4; i <= 4; i++) {
+        const rx = i * (HULL_W / 10);
+        const ry = -HULL_H / 2 + 4 - Math.pow(rx / (HULL_W / 2), 2) * 9;
+        ctx.fillStyle = 'rgba(196, 150, 84, 0.85)';
+        ctx.beginPath(); ctx.arc(rx, ry, 1.5, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = 'rgba(255, 236, 190, 0.7)';
+        ctx.beginPath(); ctx.arc(rx - 0.4, ry - 0.5, 0.6, 0, Math.PI * 2); ctx.fill();
+    }
 
     // banco / trave interna
     ctx.save();

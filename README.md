@@ -35,6 +35,9 @@ Também funciona **offline** depois do primeiro acesso (PWA / Service Worker).
   proporcional aos pixels
 - Campo de estrelas pré-renderizado e `shadowBlur` restrito a épicos/lendários
   (custo de render controlado no tablet)
+- Texturas procedurais geradas em runtime e usadas como padrão: veio de
+  madeira no casco, grão na areia, trama no tecido — custo de um fill por
+  superfície, independente de quanta informação tenha dentro
 - UI em glassmorphism (backdrop-filter)
 - Economia exponencial com rebalanceamento por raridade
 - Save/load via `localStorage` + exportar/importar entre aparelhos
