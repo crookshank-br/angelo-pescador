@@ -19,6 +19,10 @@ Também funciona **offline** depois do primeiro acesso (PWA / Service Worker).
 - Personagem e barco 100% vetoriais em canvas (sem sprites): cachos animados,
   piscada periódica, respiração e comemoração ao fisgar
 - Cena em camadas com paralaxe: silhuetas de fundo, cardumes, terreno e vinheta
+- Peixes com arte pré-renderizada (bake): cada espécie é desenhada uma vez em
+  canvas offscreen num ciclo de batida da cauda, o que libera escamas,
+  iridescência, raios de nadadeira e glow de raridade sem custo por frame
+  (2.4 MB para as 25 espécies, ~1 ms por espécie, assado sob demanda)
 - Física de corda via integração de Verlet (26 segmentos)
 - Sistema de partículas (splash + brilhos) + textos flutuantes de dinheiro
 - Cáusticos de água com `globalCompositeOperation: 'screen'` + caminho de brilho do sol

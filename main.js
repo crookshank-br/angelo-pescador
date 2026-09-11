@@ -627,6 +627,7 @@ function resizeCanvas() {
     cw = r.width;
     ch = r.height;
     rt.fx = null;                              // camadas offscreen viram lixo no resize
+    fishSprites = null;                        // sprites assados em outro dpr tambem
 }
 
 function waterY()       { return ch * 0.22; }
@@ -1333,71 +1334,111 @@ function updateFish(delta) {
     }
 }
 
-function drawFish(f) {
-    ctx.save();
-    ctx.translate(f.x, f.y);
-    ctx.rotate(f.rotation);
-    if (f.flipped) ctx.scale(-1, 1);
+// =================================================================
+// PEIXES — arte pré-renderizada (bake) + blit por frame
+//
+// Desenhar o peixe forma por forma a cada frame limitava o detalhe: são até
+// 14 peixes na tela, 60x por segundo. Renderizando cada espécie uma vez em
+// canvas offscreen (um ciclo completo de batida da cauda), o detalhe passa a
+// ser pago uma vez só. Isso libera escamas, iridescência, raios de nadadeira
+// e o glow de raridade — inclusive shadowBlur, a operação mais cara do
+// canvas — sem nenhum custo por frame.
+// =================================================================
 
-    const s = f.fish.size;
-    const idx = f.fishIdx ?? FISH.indexOf(f.fish);
-    const col = idx >= 0 ? FISH_COLORS[idx] : null;
-    const L = s * 0.56;          // comprimento do corpo (focinho → pedúnculo)
-    const H = s * 0.15;          // meia-altura do corpo
-    const tailLen = s * 0.16;
+const FISH_SPRITE_FRAMES = 6;      // ciclo da cauda; acima disso não se percebe
+let fishSprites = null;            // cache lazy, por espécie
 
-    // Silhueta do corpo — hasteada aqui porque o glow também a usa
-    const bodyPath = () => {
+function fishGeom(s) {
+    return { L: s * 0.56, H: s * 0.15, tail: s * 0.21 };
+}
+
+// Sobra no sprite para o glow de raridade, que também vai assado
+function fishSpritePad(rarity) {
+    if (rarity === 'legendary') return 30;
+    if (rarity === 'epic')      return 20;
+    return 6;
+}
+
+// Silhueta do corpo: focinho → dorso → ventre
+function fishBodyPath(L, H) {
+    ctx.beginPath();
+    ctx.moveTo(L * 0.52, 0);
+    ctx.bezierCurveTo(L * 0.30, -H * 1.00, -L * 0.10, -H * 1.02, -L * 0.48, -H * 0.28);
+    ctx.lineTo(-L * 0.50, H * 0.28);
+    ctx.bezierCurveTo(-L * 0.10, H * 1.02, L * 0.30, H * 1.00, L * 0.52, 0);
+    ctx.closePath();
+}
+
+// Membrana de nadadeira com raios — o que faz a nadadeira parecer nadadeira
+// em vez de um triângulo colorido.
+function finRays(ax, ay, bx, by, cx, cy, n, alpha) {
+    ctx.strokeStyle = 'rgba(255, 255, 255, ' + alpha + ')';
+    ctx.lineWidth = 0.7;
+    for (let i = 1; i < n; i++) {
+        const p = i / n;
         ctx.beginPath();
-        ctx.moveTo(L * 0.52, 0);
-        ctx.bezierCurveTo(L * 0.30, -H * 1.00, -L * 0.10, -H * 1.02, -L * 0.48, -H * 0.28);
-        ctx.lineTo(-L * 0.50, H * 0.28);
-        ctx.bezierCurveTo(-L * 0.10, H * 1.02, L * 0.30, H * 1.00, L * 0.52, 0);
-        ctx.closePath();
-    };
+        ctx.moveTo(ax, ay);
+        const ex = bx + (cx - bx) * p;
+        const ey = by + (cy - by) * p;
+        // 0.78: para antes da borda — raio encostando na ponta vaza da membrana
+        ctx.lineTo(ax + (ex - ax) * 0.78, ay + (ey - ay) * 0.78);
+        ctx.stroke();
+    }
+}
 
-    const main = col ? col[0] : '#9BC4DC';
-    const dark = col ? col[1] : '#5E86A0';
-    const lite = col ? col[2] : '#CFE6F2';
-    const fin  = col ? col[3] : '#7FA8C0';
+// Arte completa de uma espécie, na origem, para um instante da batida.
+// Nada aqui depende de rt.time: tudo vem de `beat`.
+function drawFishArt(idx, beat) {
+    const fish = FISH[idx];
+    const s = fish.size;
+    const col = FISH_COLORS[idx] || ['#9BC4DC', '#5E86A0', '#CFE6F2', '#7FA8C0', '#B8E2F2'];
+    const main = col[0], dark = col[1], lite = col[2], fin = col[3], accent = col[4];
+    const g = fishGeom(s);
+    const L = g.L, H = g.H, tail = g.tail;
 
-    // Batida da cauda/nadadeiras (cada peixe com sua fase)
-    const beat = Math.sin(rt.time * 0.011 + (f.bobPhase || 0));
-
-    // Sombra projetada no fundo
+    // ── SOMBRA PROJETADA ────────────────────────────────────────
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
     ctx.beginPath();
     ctx.ellipse(0, H + 5, L * 0.5, 3, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // ── CAUDA (gira no pedúnculo, acompanhando a batida) ────────
+    // ── CAUDA ───────────────────────────────────────────────────
     ctx.save();
     ctx.translate(-L * 0.48, 0);
     ctx.rotate(beat * 0.30);
-    ctx.fillStyle = fin;
-    ctx.globalAlpha = 0.92;
+    const tg = ctx.createLinearGradient(0, 0, -tail, 0);
+    tg.addColorStop(0, lite);
+    tg.addColorStop(0.45, fin);
+    tg.addColorStop(1, main);
+    ctx.fillStyle = tg;
+    ctx.globalAlpha = 1;
     ctx.beginPath();
     ctx.moveTo(2, 0);
-    ctx.quadraticCurveTo(-tailLen * 0.50, -H * 0.50, -tailLen, -H * 1.55);
-    ctx.quadraticCurveTo(-tailLen * 0.46, -H * 0.40, -tailLen * 0.30, 0);
-    ctx.quadraticCurveTo(-tailLen * 0.46,  H * 0.40, -tailLen,  H * 1.55);
-    ctx.quadraticCurveTo(-tailLen * 0.50,  H * 0.50, 2, 0);
+    ctx.quadraticCurveTo(-tail * 0.52, -H * 0.55, -tail, -H * 1.20);
+    ctx.quadraticCurveTo(-tail * 0.60, -H * 0.34, -tail * 0.52, 0);
+    ctx.quadraticCurveTo(-tail * 0.60,  H * 0.34, -tail,  H * 1.20);
+    ctx.quadraticCurveTo(-tail * 0.52,  H * 0.55, 2, 0);
     ctx.closePath();
     ctx.fill();
+    finRays(0, 0, -tail, -H * 1.15, -tail * 0.52, 0, 4, 0.30);
+    finRays(0, 0, -tail,  H * 1.15, -tail * 0.52, 0, 4, 0.30);
     ctx.globalAlpha = 1;
     ctx.restore();
 
-    // ── NADADEIRA DORSAL ────────────────────────────────────────
+    // ── DORSAL ──────────────────────────────────────────────────
     ctx.fillStyle = fin;
-    ctx.globalAlpha = 0.85;
+    ctx.globalAlpha = 0.88;
     ctx.beginPath();
     ctx.moveTo(-L * 0.26, -H * 0.72);
     ctx.quadraticCurveTo(-L * 0.08, -H * (1.42 + beat * 0.10), L * 0.10, -H * 0.92);
     ctx.quadraticCurveTo(-L * 0.06, -H * 1.00, -L * 0.26, -H * 0.72);
     ctx.closePath();
     ctx.fill();
+    finRays(-L * 0.20, -H * 0.78, -L * 0.06, -H * 1.32, L * 0.08, -H * 0.90, 4, 0.32);
 
-    // ── NADADEIRA ANAL ──────────────────────────────────────────
+    // ── ANAL ────────────────────────────────────────────────────
+    ctx.globalAlpha = 0.85;
+    ctx.fillStyle = fin;
     ctx.beginPath();
     ctx.moveTo(-L * 0.32, H * 0.62);
     ctx.quadraticCurveTo(-L * 0.20, H * (1.18 - beat * 0.08), -L * 0.08, H * 0.78);
@@ -1412,24 +1453,61 @@ function drawFish(f) {
     bg.addColorStop(0.42, main);
     bg.addColorStop(1,    dark);
     ctx.fillStyle = bg;
-    bodyPath();
+    fishBodyPath(L, H);
     ctx.fill();
 
-    // Barriga clara
+    // Tudo daqui pra baixo fica confinado ao corpo
     ctx.save();
-    bodyPath();
+    fishBodyPath(L, H);
     ctx.clip();
-    const belly = ctx.createLinearGradient(0, H * 0.15, 0, H * 1.1);
+
+    // Escamas: fileiras alternadas de arcos, com sombra embaixo e luz em cima
+    const colW = Math.max(2.2, L * 0.095);
+    const rowH = Math.max(2.0, H * 0.40);
+    for (let r = -3; r <= 3; r++) {
+        for (let c = -6; c <= 4; c++) {
+            const sx = c * colW + (Math.abs(r % 2) ? colW * 0.5 : 0);
+            const sy = r * rowH;
+            ctx.strokeStyle = 'rgba(0, 18, 34, 0.13)';
+            ctx.lineWidth = 0.8;
+            ctx.beginPath();
+            ctx.arc(sx, sy, colW * 0.62, Math.PI * 0.12, Math.PI * 0.88);
+            ctx.stroke();
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.13)';
+            ctx.beginPath();
+            ctx.arc(sx, sy - 0.7, colW * 0.62, Math.PI * 0.18, Math.PI * 0.82);
+            ctx.stroke();
+        }
+    }
+
+    // Barriga clara
+    const belly = ctx.createLinearGradient(0, H * 0.10, 0, H * 1.1);
     belly.addColorStop(0, 'rgba(255,255,255,0)');
-    belly.addColorStop(1, 'rgba(255,255,255,0.38)');
+    belly.addColorStop(1, 'rgba(255,255,255,0.42)');
     ctx.fillStyle = belly;
     ctx.fillRect(-L, 0, L * 2, H * 1.2);
 
-    // Listras decorativas (em parte das espécies)
-    if (col && idx % 3 !== 2 && col[4]) {
-        ctx.strokeStyle = col[4];
+    // Oclusão no ventre — separa a barriga do fundo
+    const ao = ctx.createLinearGradient(0, H * 0.55, 0, H * 1.15);
+    ao.addColorStop(0, 'rgba(0, 20, 40, 0)');
+    ao.addColorStop(1, 'rgba(0, 20, 40, 0.30)');
+    ctx.fillStyle = ao;
+    ctx.fillRect(-L, H * 0.5, L * 2, H * 0.7);
+
+    // Iridescência: sheen frio→quente atravessando o corpo
+    const irid = ctx.createLinearGradient(-L * 0.5, -H, L * 0.5, H);
+    irid.addColorStop(0,    'rgba(120, 225, 255, 0.16)');
+    irid.addColorStop(0.45, 'rgba(255, 255, 255, 0.04)');
+    irid.addColorStop(0.75, 'rgba(255, 150, 220, 0.13)');
+    irid.addColorStop(1,    'rgba(150, 255, 210, 0.10)');
+    ctx.fillStyle = irid;
+    ctx.fillRect(-L, -H * 1.2, L * 2, H * 2.4);
+
+    // Listras (em parte das espécies)
+    if (accent && idx % 3 !== 2) {
+        ctx.strokeStyle = accent;
         ctx.lineWidth = Math.max(1.2, s * 0.030);
-        ctx.globalAlpha = 0.42;
+        ctx.globalAlpha = 0.26;
         for (let si = 0; si < 3; si++) {
             const ox = -L * 0.22 + si * L * 0.17;
             ctx.beginPath();
@@ -1440,22 +1518,24 @@ function drawFish(f) {
         ctx.globalAlpha = 1;
     }
 
-    // Brilho especular no dorso
-    ctx.fillStyle = 'rgba(255,255,255,0.30)';
+    // Luz de topo (rim light no dorso)
+    const rim = ctx.createLinearGradient(0, -H * 1.05, 0, -H * 0.35);
+    rim.addColorStop(0, 'rgba(255,255,255,0.42)');
+    rim.addColorStop(1, 'rgba(255,255,255,0)');
+    ctx.fillStyle = rim;
+    ctx.fillRect(-L, -H * 1.1, L * 2, H * 0.8);
+
+    // Brilho especular
+    ctx.fillStyle = 'rgba(255,255,255,0.26)';
     ctx.beginPath();
-    ctx.ellipse(L * 0.06, -H * 0.62, L * 0.26, H * 0.16, -0.07, 0, Math.PI * 2);
+    ctx.ellipse(L * 0.04, -H * 0.60, L * 0.24, H * 0.15, -0.07, 0, Math.PI * 2);
     ctx.fill();
-    ctx.restore();
 
-    // Contorno leve — separa o peixe da água
-    ctx.strokeStyle = 'rgba(0, 22, 40, 0.28)';
-    ctx.lineWidth = Math.max(0.8, s * 0.012);
-    bodyPath();
-    ctx.stroke();
+    ctx.restore();   // fim do clip do corpo
 
-    // ── NADADEIRA PEITORAL (sobre o corpo) ──────────────────────
+    // ── PEITORAL (por cima do corpo) ────────────────────────────
     ctx.fillStyle = fin;
-    ctx.globalAlpha = 0.7;
+    ctx.globalAlpha = 0.72;
     ctx.save();
     ctx.translate(L * 0.16, H * 0.28);
     ctx.rotate(0.30 + beat * 0.18);
@@ -1465,107 +1545,183 @@ function drawFish(f) {
     ctx.quadraticCurveTo(-L * 0.04, H * 0.24, 0, 0);
     ctx.closePath();
     ctx.fill();
+    finRays(0, 0, -L * 0.14, H * 0.54, -L * 0.02, H * 0.10, 3, 0.34);
     ctx.restore();
     ctx.globalAlpha = 1;
 
-    // Linha das guelras
-    ctx.strokeStyle = 'rgba(0, 30, 50, 0.28)';
+    // ── OPÉRCULO (tampa da guelra) ──────────────────────────────
+    ctx.strokeStyle = 'rgba(0, 30, 50, 0.30)';
     ctx.lineWidth = Math.max(0.8, s * 0.010);
     ctx.beginPath();
     ctx.moveTo(L * 0.24, -H * 0.66);
     ctx.quadraticCurveTo(L * 0.15, 0, L * 0.24, H * 0.62);
     ctx.stroke();
+    ctx.strokeStyle = 'rgba(255, 255, 255, 0.22)';
+    ctx.lineWidth = Math.max(0.6, s * 0.007);
+    ctx.beginPath();
+    ctx.moveTo(L * 0.26, -H * 0.62);
+    ctx.quadraticCurveTo(L * 0.17, 0, L * 0.26, H * 0.58);
+    ctx.stroke();
+
+    // ── BOCA ────────────────────────────────────────────────────
+    ctx.strokeStyle = 'rgba(0, 25, 45, 0.45)';
+    ctx.lineWidth = Math.max(0.7, s * 0.009);
+    ctx.beginPath();
+    ctx.moveTo(L * 0.50, H * 0.04);
+    ctx.quadraticCurveTo(L * 0.44, H * 0.16, L * 0.38, H * 0.13);
+    ctx.stroke();
+
+    // ── CONTORNO ────────────────────────────────────────────────
+    ctx.strokeStyle = 'rgba(0, 22, 40, 0.30)';
+    ctx.lineWidth = Math.max(0.8, s * 0.012);
+    fishBodyPath(L, H);
+    ctx.stroke();
 
     // ── OLHO ────────────────────────────────────────────────────
     const eyeR = Math.max(1.3, H * 0.24);
+    const ex = L * 0.30, ey = -H * 0.16;
     ctx.fillStyle = '#fff';
     ctx.beginPath();
-    ctx.arc(L * 0.30, -H * 0.16, eyeR, 0, Math.PI * 2);
+    ctx.arc(ex, ey, eyeR, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = 'rgba(0,20,40,0.25)';
+    const iris = ctx.createRadialGradient(ex + eyeR * 0.1, ey - eyeR * 0.1, eyeR * 0.1,
+                                          ex + eyeR * 0.1, ey, eyeR * 0.62);
+    iris.addColorStop(0, '#4A6E8A');
+    iris.addColorStop(1, '#10202E');
+    ctx.fillStyle = iris;
+    ctx.beginPath();
+    ctx.arc(ex + eyeR * 0.12, ey + eyeR * 0.08, eyeR * 0.58, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#0A121C';
+    ctx.beginPath();
+    ctx.arc(ex + eyeR * 0.12, ey + eyeR * 0.08, eyeR * 0.30, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = '#fff';
+    ctx.beginPath();
+    ctx.arc(ex + eyeR * 0.30, ey - eyeR * 0.36, eyeR * 0.26, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(0,20,40,0.30)';
     ctx.lineWidth = 0.8;
+    ctx.beginPath();
+    ctx.arc(ex, ey, eyeR, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.fillStyle = '#14202E';
-    ctx.beginPath();
-    ctx.arc(L * 0.315, -H * 0.14, eyeR * 0.54, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.beginPath();
-    ctx.arc(L * 0.335, -H * 0.26, eyeR * 0.27, 0, Math.PI * 2);
-    ctx.fill();
+
+    // ── GLOW DE RARIDADE (assado: zero shadowBlur por frame) ────
+    const glow = RARITY_GLOW[fish.rarity];
+    if (glow) {
+        ctx.save();
+        if (fish.rarity === 'legendary' || fish.rarity === 'epic') {
+            ctx.shadowColor = glow;
+            ctx.shadowBlur = fish.rarity === 'legendary' ? 22 : 14;
+            ctx.globalAlpha = 0.55;
+            ctx.lineWidth = 1.4;
+        } else {
+            ctx.globalAlpha = fish.rarity === 'rare' ? 0.55 : 0.35;
+            ctx.lineWidth = fish.rarity === 'rare' ? 1.6 : 1.0;
+        }
+        ctx.strokeStyle = glow;
+        fishBodyPath(L, H);
+        ctx.stroke();
+        ctx.restore();
+    }
+}
+
+// Assa um ciclo de animação da espécie em canvas offscreen
+function bakeFishSprite(idx) {
+    const fish = FISH[idx];
+    const s = fish.size;
+    const pad = fishSpritePad(fish.rarity);
+    const g = fishGeom(s);
+
+    const left   = g.L * 0.48 + g.tail + pad;   // ponta da cauda
+    const right  = g.L * 0.52 + pad;            // focinho
+    const top    = s * 0.28 + pad;
+    const bottom = s * 0.28 + pad + 8;          // sobra da sombra projetada
+
+    const w = Math.ceil(left + right);
+    const h = Math.ceil(top + bottom);
+    const dpr = renderDpr;
+    const frames = [];
+
+    for (let i = 0; i < FISH_SPRITE_FRAMES; i++) {
+        const c = document.createElement('canvas');
+        c.width  = Math.max(1, Math.round(w * dpr));
+        c.height = Math.max(1, Math.round(h * dpr));
+        const prev = ctx;
+        ctx = c.getContext('2d');
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        ctx.translate(left, top);
+        try {
+            drawFishArt(idx, Math.sin((i / FISH_SPRITE_FRAMES) * Math.PI * 2));
+        } finally {
+            ctx = prev;
+        }
+        frames.push(c);
+    }
+
+    return { frames: frames, w: w, h: h, ox: left, oy: top, dpr: dpr };
+}
+
+function fishSpriteFor(idx) {
+    if (!fishSprites) fishSprites = {};
+    const cached = fishSprites[idx];
+    if (cached && cached.dpr === renderDpr) return cached;
+    const sp = bakeFishSprite(idx);
+    fishSprites[idx] = sp;
+    return sp;
+}
+
+// Marcadores de raridade: [glifo, px, r, g, b, velocidade, base, amplitude, altura]
+const RARITY_MARK = {
+    legendary: ['⭐', 14, 255, 179,  71, 0.008, 0.50, 0.50, 2.0],
+    epic:      ['✦', 11, 187, 134, 252, 0.006, 0.40, 0.40, 1.8],
+    rare:      ['♦',  9,  78, 205, 196, 0.005, 0.30, 0.30, 1.6],
+    uncommon:  ['·',  8, 173, 216, 230, 0.004, 0.25, 0.20, 1.5],
+};
+
+function drawFish(f) {
+    const idx = f.fishIdx != null ? f.fishIdx : FISH.indexOf(f.fish);
+    if (idx < 0) return;
+    const g = fishGeom(f.fish.size);
+    const L = g.L, H = g.H;
+
+    // Quadro do ciclo de batida — mesma fase de antes, agora quantizada
+    const phase = (rt.time * 0.011 + (f.bobPhase || 0)) / (Math.PI * 2);
+    const frameIdx = ((Math.floor(phase * FISH_SPRITE_FRAMES) % FISH_SPRITE_FRAMES)
+                      + FISH_SPRITE_FRAMES) % FISH_SPRITE_FRAMES;
+
+    const sp = fishSpriteFor(idx);
+
+    ctx.save();
+    ctx.translate(f.x, f.y);
+    ctx.rotate(f.rotation);
+    if (f.flipped) ctx.scale(-1, 1);
+
+    ctx.drawImage(sp.frames[frameIdx], -sp.ox, -sp.oy, sp.w, sp.h);
+
+    // ── SOBREPOSIÇÕES DINÂMICAS (dependem do estado, não dá pra assar) ──
 
     // Barra de vida do chefão
     if (f.bossHp > 0 && f.bossMaxHp > 0) {
         const bw = L * 0.7, bh = Math.max(3, H * 0.28);
         const ratio = f.bossHp / f.bossMaxHp;
         ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.fillRect(-bw/2, -H * 1.3, bw, bh);
-        const barGrad = ctx.createLinearGradient(-bw/2, 0, -bw/2 + bw * ratio, 0);
+        ctx.fillRect(-bw / 2, -H * 1.3, bw, bh);
+        const barGrad = ctx.createLinearGradient(-bw / 2, 0, -bw / 2 + bw * ratio, 0);
         barGrad.addColorStop(0, '#ff4444');
         barGrad.addColorStop(1, '#ffb347');
         ctx.fillStyle = barGrad;
-        ctx.fillRect(-bw/2 + 1, -H * 1.3 + 1, (bw - 2) * ratio, bh - 2);
+        ctx.fillRect(-bw / 2 + 1, -H * 1.3 + 1, (bw - 2) * ratio, bh - 2);
     }
 
-    // Glow por raridade. shadowBlur é a operação mais cara do canvas, então só
-    // épicos/lendários (raros na tela) ganham; o resto usa contorno colorido barato.
-    // Sem isso, uma tela cheia de raros na Fossa derruba o FPS no tablet.
-    const glow = RARITY_GLOW[f.fish.rarity];
-    const heavyGlow = f.fish.rarity === 'legendary' || f.fish.rarity === 'epic';
-    if (glow && heavyGlow) {
-        ctx.save();
-        ctx.shadowColor = glow;
-        ctx.shadowBlur = f.fish.rarity === 'legendary' ? 22 : 14;
-        ctx.globalAlpha = 0.55;
-        ctx.strokeStyle = glow;
-        ctx.lineWidth = 1.4;
-        bodyPath();
-        ctx.stroke();
-        ctx.restore();
-    } else if (glow) {
-        // Incomuns e raros: stroke colorido leve, sem shadow
-        ctx.save();
-        ctx.globalAlpha = f.fish.rarity === 'rare' ? 0.55 : 0.35;
-        ctx.strokeStyle = glow;
-        ctx.lineWidth = f.fish.rarity === 'rare' ? 1.6 : 1.0;
-        bodyPath();
-        ctx.stroke();
-        ctx.restore();
-    }
-
-    // Indicador de raridade (estrelas acima de peixes raros+)
-    if (f.fish.rarity === 'legendary') {
-        const shimmer = 0.5 + 0.5 * Math.sin(rt.time * 0.008);
-        ctx.save();
-        ctx.fillStyle = `rgba(255, 179, 71, ${shimmer})`;
-        ctx.font = '14px sans-serif';
+    // Indicador de raridade (pisca, então fica fora do sprite)
+    const mark = RARITY_MARK[f.fish.rarity];
+    if (mark) {
+        const shimmer = mark[6] + mark[7] * Math.sin(rt.time * mark[5]);
+        ctx.fillStyle = 'rgba(' + mark[2] + ', ' + mark[3] + ', ' + mark[4] + ', ' + shimmer + ')';
+        ctx.font = mark[1] + 'px sans-serif';
         ctx.textAlign = 'center';
-        ctx.fillText('⭐', 0, -H * 2);
-        ctx.restore();
-    } else if (f.fish.rarity === 'epic') {
-        const shimmer = 0.4 + 0.4 * Math.sin(rt.time * 0.006);
-        ctx.save();
-        ctx.fillStyle = `rgba(187, 134, 252, ${shimmer})`;
-        ctx.font = '11px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('✦', 0, -H * 1.8);
-        ctx.restore();
-    } else if (f.fish.rarity === 'rare') {
-        const shimmer = 0.3 + 0.3 * Math.sin(rt.time * 0.005);
-        ctx.save();
-        ctx.fillStyle = `rgba(78, 205, 196, ${shimmer})`;
-        ctx.font = '9px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('♦', 0, -H * 1.6);
-        ctx.restore();
-    } else if (f.fish.rarity === 'uncommon') {
-        const shimmer = 0.25 + 0.2 * Math.sin(rt.time * 0.004);
-        ctx.save();
-        ctx.fillStyle = `rgba(173, 216, 230, ${shimmer})`;
-        ctx.font = '8px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('·', 0, -H * 1.5);
-        ctx.restore();
+        ctx.fillText(mark[0], 0, -H * mark[8]);
     }
 
     ctx.restore();
