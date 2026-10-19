@@ -40,6 +40,11 @@ Também funciona **offline** depois do primeiro acesso (PWA / Service Worker).
   superfície, independente de quanta informação tenha dentro
 - UI em glassmorphism (backdrop-filter)
 - Economia exponencial com rebalanceamento por raridade
+- Prestígio com 6 bônus permanentes de pérola (valor, rede, multi-captura,
+  herança, ímã de baús, correnteza calma)
+- Aquário: ralo de dinheiro de fim de jogo ligado ao compêndio — expor cada
+  espécie dá valor permanente, com bônus extra por zona completa ($84M e +65%
+  com as 25 espécies)
 - Save/load via `localStorage` + exportar/importar entre aparelhos
 - PWA instalável com cache offline
 - Áudio 100% sintetizado via Web Audio API (SFX + ambiente de ondas) com mute persistente

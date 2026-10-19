@@ -2460,3 +2460,64 @@ canvas { touch-action: none; }
     .cast-button { min-width: 170px; padding: 11px 18px; font-size: 12px; }
     .zone-card-preview { display: none; }
 }
+
+/* ===== AQUÁRIO (ralo de dinheiro do fim de jogo, dentro do Compêndio) ===== */
+.aquarium-summary {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    font-size: 0.78rem;
+    color: #cfe3f5;
+    background: rgba(20, 70, 120, 0.30);
+    border: 1px solid rgba(120, 200, 255, 0.22);
+    border-radius: 10px;
+}
+.aquarium-summary strong { color: #8fd4ff; }
+.aquarium-summary .aq-bonus { color: #ffd76a; font-weight: 700; }
+
+.comp-aq-buy {
+    margin-top: 4px;
+    width: 100%;
+    padding: 3px 4px;
+    font-family: inherit;
+    font-size: 0.62rem;
+    font-weight: 700;
+    line-height: 1.2;
+    color: #9fb4c6;
+    background: rgba(12, 34, 56, 0.75);
+    border: 1px solid rgba(120, 180, 230, 0.28);
+    border-radius: 6px;
+    cursor: not-allowed;
+    transition: background .15s, color .15s, border-color .15s, transform .1s;
+}
+.comp-aq-buy.aq-ok {
+    color: #06202f;
+    background: linear-gradient(180deg, #7fd8ff, #37a9e0);
+    border-color: rgba(190, 236, 255, 0.7);
+    cursor: pointer;
+}
+.comp-aq-buy.aq-ok:hover  { filter: brightness(1.12); }
+.comp-aq-buy.aq-ok:active { transform: translateY(1px); }
+
+.comp-aq-badge {
+    margin-top: 4px;
+    display: block;
+    font-size: 0.62rem;
+    font-weight: 700;
+    color: #ffd76a;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+
+/* Espécie exposta: moldura dourada */
+.comp-cell.comp-aquario {
+    border-color: rgba(255, 199, 92, 0.75);
+    box-shadow: 0 0 0 1px rgba(255, 199, 92, 0.25) inset,
+                0 0 12px rgba(255, 190, 70, 0.22);
+}
+
+@media (pointer: coarse) {
+    .comp-aq-buy, .comp-aq-badge { font-size: 0.58rem; }
+}

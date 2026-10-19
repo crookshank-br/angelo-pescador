@@ -137,6 +137,7 @@
                             <button class="comp-filter-btn" data-filter="caught">Capturados</button>
                             <button class="comp-filter-btn" data-filter="missing">Faltam</button>
                         </div>
+                        <div class="aquarium-summary" id="aquariumSummary"></div>
                         <div class="compendium-grid" id="compendiumGrid"></div>
                     </div>
                 </div>
@@ -158,7 +159,7 @@
             </div>
 
             <footer class="app-footer">
-                <span class="version-tag">v3.8 · <a href="https://github.com/crookshank-br/angelo-pescador" target="_blank" rel="noopener">GitHub</a></span>
+                <span class="version-tag">v4.0 · <a href="https://github.com/crookshank-br/angelo-pescador" target="_blank" rel="noopener">GitHub</a></span>
             </footer>
         </aside>
     </div>
@@ -214,6 +215,30 @@
                     </div>
                     <button class="pbc-buy" data-bonus="multi">Gastar 1 🦪</button>
                 </div>
+                <div class="pearl-bonus-card">
+                    <div class="pbc-info">
+                        <strong>💰 Herança</strong>
+                        <small>Começa cada prestígio com +$1.500 por nível</small>
+                        <span class="pbc-level">Nível: <strong id="prestigeBonusLegacy">0</strong></span>
+                    </div>
+                    <button class="pbc-buy" data-bonus="legacy">Gastar 1 🦪</button>
+                </div>
+                <div class="pearl-bonus-card">
+                    <div class="pbc-info">
+                        <strong>🧲 Ímã de Baús</strong>
+                        <small>+5% de chance de baú e +12% no valor deles</small>
+                        <span class="pbc-level">Nível: <strong id="prestigeBonusChest">0</strong></span>
+                    </div>
+                    <button class="pbc-buy" data-bonus="chest">Gastar 1 🦪</button>
+                </div>
+                <div class="pearl-bonus-card">
+                    <div class="pbc-info">
+                        <strong>🐢 Correnteza Calma</strong>
+                        <small>Peixes 4% mais lentos por nível (até −45%)</small>
+                        <span class="pbc-level">Nível: <strong id="prestigeBonusCalm">0</strong></span>
+                    </div>
+                    <button class="pbc-buy" data-bonus="calm">Gastar 1 🦪</button>
+                </div>
             </div>
         </div>
     </div>
@@ -238,6 +263,7 @@
                 <li><strong>Compre melhorias</strong> com seu dinheiro pra evoluir.</li>
                 <li><strong>Desbloqueie zonas</strong> mais profundas comprando o Motor.</li>
                 <li><strong>Atinge $500k?</strong> Faça <strong>Prestígio</strong> e ganhe Pérolas eternas! 🦪</li>
+                <li><strong>Pescou uma espécie nova?</strong> Exponha ela no <strong>Aquário</strong> (aba Espécies) — cada uma dá valor extra pra sempre. 🏛️</li>
             </ol>
             <button class="tutorial-ok" id="tutorialOkBtn">Bora pescar! 🎣</button>
         </div>

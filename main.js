@@ -419,10 +419,11 @@ let state = {
     achievements: {},
     _speciesCaught: {},
     _legendaryCaught: false,
+    aquarium: {},          // espécies expostas (ralo de dinheiro do fim de jogo)
     // Prestígio
     pearls: 0,
     totalEarned: 0,        // dinheiro acumulado vitalício (não decrementa em compras)
-    pearlBonuses: { value: 0, spawn: 0, multi: 0 },  // upgrades comprados com pérolas
+    pearlBonuses: { value: 0, spawn: 0, multi: 0, legacy: 0, chest: 0, calm: 0 },   // comprados com pérolas
     // Stats
     _biggestCatch: null,
     _maxCombo: 0,
@@ -431,6 +432,8 @@ let state = {
     quests: { date: '', list: [] },
     // Itens consumíveis
     consumables: { extraBait: 0, magnify: 0, chronometer: 0 },
+    // Efeitos ativos (persistem no save; duram até o fim da próxima sessão)
+    consumablesActive: { extraBait: false, magnify: false, chronometer: false },
 };
 
 const rt = {
@@ -475,43 +478,58 @@ const rt = {
 function calcCost(up, lvl) { return Math.floor(up.baseCost * Math.pow(up.costMultiplier, lvl)); }
 function getSessionDuration() {
     let dur = SESSION_BASE_MS + state.upgrades.rod * 250;
-    if (rt.consumableActive?.type === 'chronometer') dur *= 1.5;
+    if (isConsumableActive('chronometer')) dur *= 1.5;
     return dur;
 }
 function getSpawnInterval()  {
     const reduction = Math.pow(0.95, state.upgrades.bait);
     let interval = SPAWN_BASE_MS * reduction;
     if (rt.eventActive && rt.eventActive.type === 'cardume') interval *= 0.4;
-    if (rt.consumableActive?.type === 'extraBait') interval *= 0.5;
+    if (isConsumableActive('extraBait')) interval *= 0.5;
     return Math.max(450, interval);
 }
 
+// Efeitos ativos dos consumíveis (persistidos no save; duram até o fim da próxima sessão)
+function isConsumableActive(id) { return !!(state.consumablesActive && state.consumablesActive[id]); }
 function consumableFiltersFish(fish) {
-    if (rt.consumableActive?.type === 'magnify' && fish.rarity === 'common') return false;
+    if (isConsumableActive('magnify') && fish.rarity === 'common') return false;
     return true;
 }
 function getHookRadius()     { return HOOK_BASE_RADIUS * (1 + state.upgrades.hook * 0.08); }
 function getMultiCatchChance() {
-    // Anzol Sortudo (pérola): +3% de chance de captura múltipla por nível
-    const luck = (state.pearlBonuses?.multi || 0) * 0.03;
-    return Math.min(0.65, 0.01 + state.upgrades.hook * 0.035 + state.upgrades.bait * 0.010 + luck);
+    // Anzol Sortudo (pérola): +3% de chance E +2% no teto por nível.
+    // Sem levantar o teto a pérola virava lixo: Anzol 18 + Isca 20 já dá 0.84
+    // bruto sem pérola nenhuma, então tudo acima de 0.65 era desperdiçado.
+    const multi = state.pearlBonuses?.multi || 0;
+    const teto = Math.min(0.90, 0.65 + multi * 0.02);
+    return Math.min(teto, 0.01 + state.upgrades.hook * 0.035 + state.upgrades.bait * 0.010 + multi * 0.03);
 }
 function getMaxExtras()        { return 1 + Math.floor(state.upgrades.hook / 8); }
 function getBaitRarityBonus()  { return Math.min(0.35, state.upgrades.bait * 0.025); }
 function getValueMultiplier()  {
     return (1 + state.upgrades.value * 0.04)
          * (1 + (state.upgrades.abyss || 0) * 0.10)
-         * getPearlValueMult();
+         * getPearlValueMult()
+         * getAquariumMult();
 }
 function getPassiveRate()      { return state.upgrades.net * 0.10 * (1 + (state.pearlBonuses?.spawn || 0) * 0.05); }
 function isZoneUnlocked(id)    { return state.upgrades.motor >= ZONES[id].requiredMotor; }
 
 // === PRESTÍGIO (PÉROLAS) ===
 function getPearlValueMult()   { return 1 + (state.pearlBonuses?.value || 0) * 0.05; }   // +5% por pérola gasta em valor
+// 💰 Herança: começa cada prestígio com dinheiro — é o que faz recomeçar valer a pena
+function getLegacyMoney()      { return (state.pearlBonuses?.legacy || 0) * 1500; }
+// 🧲 Ímã de Baús: baús mais frequentes e mais gordos
+function getChestChance()      { return Math.min(0.75, 0.35 + (state.pearlBonuses?.chest || 0) * 0.05); }
+function getChestValueMult()   { return 1 + (state.pearlBonuses?.chest || 0) * 0.12; }
+// 🐢 Correnteza Calma: peixes mais lentos (ajuda de verdade quem é pequeno)
+function getCalmFactor()       { return Math.max(0.55, 1 - (state.pearlBonuses?.calm || 0) * 0.04); }
 function calcPearlsAvailable() {
-    // 1 pérola a cada $500.000 ganhos vitalícios
+    // Curva de raiz quadrada sobre o ganho vitalício. O divisor foi de 500k
+    // para 120k junto com a entrada dos 6 bônus: a $500k uma zerada completa
+    // rendia só 4 pérolas, que espalhadas em 6 opções não mudavam nada.
     const earned = state.totalEarned || 0;
-    return Math.floor(Math.sqrt(earned / 500000));
+    return Math.floor(Math.sqrt(earned / 120000));
 }
 function calcPearlsToGain() {
     const total = calcPearlsAvailable();
@@ -519,7 +537,8 @@ function calcPearlsToGain() {
 }
 function sumPearlBonuses() {
     const b = state.pearlBonuses || {};
-    return (b.value || 0) + (b.spawn || 0) + (b.multi || 0);
+    return (b.value || 0) + (b.spawn || 0) + (b.multi || 0)
+         + (b.legacy || 0) + (b.chest || 0) + (b.calm || 0);
 }
 
 function fmtMoney(n) {
@@ -528,6 +547,14 @@ function fmtMoney(n) {
     if (n >= 1e6)  return '$' + (n / 1e6).toFixed(2) + 'M';
     if (n >= 1e3)  return '$' + (n / 1e3).toFixed(2) + 'K';
     return '$' + Math.floor(n).toLocaleString('pt-BR');
+}
+
+function fmtPlayTime(ms) {
+    const totalMin = Math.floor((ms || 0) / 60000);
+    const h = Math.floor(totalMin / 60);
+    const m = totalMin % 60;
+    if (h > 0) return `${h}h ${m}min`;
+    return `${m}min`;
 }
 
 function rollFish(zoneId) {
@@ -1261,7 +1288,11 @@ function spawnFish() {
     const rarityMult = { common: 1.0, uncommon: 1.15, rare: 1.35, epic: 1.6, legendary: 1.9 };
     const variance = 0.85 + Math.random() * 0.3;
     const mobileFactor = IS_COARSE ? 0.70 : 1.0;   // −30% em touch: dá tempo de reagir
-    const baseSpeed = (220 + fishType.speed * 170) * (rarityMult[fishType.rarity] || 1) * variance * mobileFactor;
+    let baseSpeed = (220 + fishType.speed * 170) * (rarityMult[fishType.rarity] || 1)
+                  * variance * mobileFactor * getCalmFactor();
+    // Chefão nadando devagar o bastante pra interceptar — a dificuldade vem
+    // dos múltiplos golpes, não de uma fuga impossível.
+    if (fishType.bossHp) baseSpeed = Math.min(baseSpeed, cw * 0.42);
     const vx = (fromLeft ? 1 : -1) * baseSpeed;
 
     rt.activeFish.push({
@@ -1305,16 +1336,26 @@ function updateFish(delta) {
             }
         }
 
-        // Peixes raros+ fogem do anzol
+        // Peixes raros+ fogem do anzol. Chefões fogem bem menos: neles a
+        // dificuldade é acertar os golpes, não perseguir pela tela inteira.
         if (rt.fishingActive && !rt.hookDescending && f.fish.rarity !== 'common') {
             const hp = hookPxPos();
             const ddx = hp.x - f.x, ddy = hp.y - f.y;
             const distSq = ddx * ddx + ddy * ddy;
             if (distSq < 40000) {                            // 200² = 40000
                 const dist = Math.sqrt(distSq);
-                const intensity = (1 - dist / 200) * (f.fish.rarity === 'legendary' ? 2.5 : f.fish.rarity === 'epic' ? 1.8 : 1.2);
+                const isBoss = f.bossMaxHp > 0;
+                const rarityMult = isBoss                     ? 0.9
+                                 : f.fish.rarity === 'legendary' ? 2.5
+                                 : f.fish.rarity === 'epic'      ? 1.8
+                                 :                                 1.2;
+                const intensity = (1 - dist / 200) * rarityMult;
                 f.vx *= (1 + intensity * dt);
-                const maxSpeed = (280 + f.fish.speed * 180) * 2.8 * (IS_COARSE ? 0.70 : 1.0);
+                // Teto de fuga em px/s proporcional à largura da tela: antes a
+                // fórmula absoluta estourava ~1.700 px/s e tornava a caça impossível.
+                const maxSpeed = isBoss
+                    ? cw * 0.50 * (IS_COARSE ? 0.85 : 1.0)
+                    : Math.min((280 + f.fish.speed * 180) * 2.8, cw * 0.90) * (IS_COARSE ? 0.70 : 1.0);
                 if (Math.abs(f.vx) > maxSpeed) f.vx = Math.sign(f.vx) * maxSpeed;
             }
         }
@@ -1325,18 +1366,36 @@ function updateFish(delta) {
             const dx = hp.x - f.x;
             const dy = hp.y - f.y;
             const r = getHookRadius();
-            if (dx * dx + dy * dy < r * r) {
+            const d2 = dx * dx + dy * dy;
+            if (d2 < r * r) {
                 const caught = catchFishInteractive(f);
                 if (caught) {
                     rt.activeFish.splice(i, 1);
                 }
                 continue;   // chefão que sobreviveu continua na tela para o próximo golpe
             }
+            // Marcado como "quase capturado": se esse peixe escapar da tela,
+            // o combo quebra — peixes que só passaram longe não punem o jogador.
+            if (d2 < r * r * 6.25) f.nearMiss = true;
         }
-        if (f.x < -100 || f.x > cw + 100) {
+        if (f.bossMaxHp > 0) {
+            // Chefão quica nas bordas e nunca abandona a arena
+            const margin = 70;
+            if (f.x < margin && f.vx < 0) {
+                f.x = margin;
+                f.vx = Math.abs(f.vx) * 0.85;
+                f.flipped = false;
+                emitSparkles(f.x, f.y, '#ffb347', 8);
+            } else if (f.x > cw - margin && f.vx > 0) {
+                f.x = cw - margin;
+                f.vx = -Math.abs(f.vx) * 0.85;
+                f.flipped = true;
+                emitSparkles(f.x, f.y, '#ffb347', 8);
+            }
+        } else if (f.x < -100 || f.x > cw + 100) {
             rt.activeFish.splice(i, 1);
-            // Peixe escapou sem ser capturado → combo quebra
-            if (rt.fishingActive) rt.combo = 0;
+            // Combo só quebra se o peixe chegou a ser perseguido (quase capturado)
+            if (rt.fishingActive && f.nearMiss) rt.combo = 0;
         }
     }
 }
@@ -2931,7 +2990,8 @@ function updateChests(delta) {
                 // Baú = jackpot ~10× média de um peixe na zona
                 // Zona 0: $30-150 · Zona 1: $480-2400 · Zona 2: $4.8k-24k · Zona 3: $75k-375k
                 const zoneChestMult = [1, 16, 160, 2500][state.currentZone] ?? 1;
-                const valor = Math.floor((30 + Math.random() * 120) * zoneChestMult * (1 + state.upgrades.bait * 0.05));
+                const valor = Math.floor((30 + Math.random() * 120) * zoneChestMult
+                                        * (1 + state.upgrades.bait * 0.05) * getChestValueMult());
                 state.money += valor;
                 state.totalEarned = (state.totalEarned || 0) + valor;   // conta para prestígio
                 questProgress('earn', valor);
@@ -3028,8 +3088,12 @@ function endFishing() {
     DOM.castButton.classList.add('cooldown');
     DOM.castProgress.style.width = '0%';
     rt.combo = 0;
-    // Consumíveis duram apenas uma sessão
-    rt.consumableActive = null;
+    // Efeitos de consumíveis duram só a sessão em que foram usados
+    if (state.consumablesActive) {
+        const hadAny = Object.values(state.consumablesActive).some(Boolean);
+        for (const k of Object.keys(state.consumablesActive)) state.consumablesActive[k] = false;
+        if (hadAny) addLog('⌛ Efeitos de itens consumidos nesta sessão.');
+    }
     updateConsumables();
 }
 
@@ -3082,13 +3146,13 @@ function catchFishInteractive(fish) {
         fish.bossHp--;
         const hp = hookPxPos();
         if (fish.bossHp > 0) {
-            // Foge acelerando e fica imune por um instante — o jogador precisa
-            // re-alcançá-lo para o próximo golpe (senão seria drenado num frame).
-            // Clampa a velocidade pra não ficar impossível nos golpes finais.
-            const bossMaxSpeed = (280 + fish.fish.speed * 180) * 2.8 * (IS_COARSE ? 0.70 : 1.0);
-            const fleeSpeed = Math.min(Math.abs(fish.vx) * 1.6, bossMaxSpeed);
+            // Foge acelerando, mas com teto proporcional à tela e janela de
+            // invulnerabilidade curta — dá pra emendar o próximo golpe quicando
+            // o chefão nas bordas (ele nunca sai da arena).
+            const bossMaxSpeed = cw * 0.50 * (IS_COARSE ? 0.85 : 1.0);
+            const fleeSpeed = Math.min(Math.abs(fish.vx) * 1.25 + 60, bossMaxSpeed);
             fish.vx = Math.sign(fish.vx || 1) * fleeSpeed;
-            fish.invulnUntil = rt.time + 450;
+            fish.invulnUntil = rt.time + 320;
             emitSparkles(hp.x, hp.y, '#ff0000', 25);
             pushFloatText(fish.x, fish.y - 24, `${fish.bossHp} golpe${fish.bossHp>1?'s':''}!`, '#ff5555', 15);
             rt.cameraShake = 10;
@@ -3201,7 +3265,7 @@ function tickFishing(now, delta) {
 
     // Spawn de baús do tesouro (raro)
     if (now >= rt.nextChestTime) {
-        if (Math.random() < 0.35) spawnChest();
+        if (Math.random() < getChestChance()) spawnChest();
         rt.nextChestTime = now + 8000 + Math.random() * 12000;
     }
 
@@ -3535,6 +3599,9 @@ const ACHIEVEMENTS = [
     { id: 'first_pearl',  name: 'Renascido',           desc: 'Faça seu primeiro Prestígio',       check: () => (state.pearls || 0) >= 1, reward: 5000 },
     { id: 'pearls_5',     name: 'Colecionador',        desc: 'Acumule 5 Pérolas',                 check: () => (state.pearls || 0) >= 5, reward: 25000 },
     { id: 'big_combo',    name: 'Maestro do Combo',    desc: 'Faça um combo x10',                 check: () => (state._maxCombo || 0) >= 10, reward: 8000 },
+    { id: 'aq_first',     name: 'Primeiro Aquário',    desc: 'Exponha sua primeira espécie',     check: () => aquariumCount() >= 1,     reward: 2000 },
+    { id: 'aq_zone',      name: 'Curador',            desc: 'Complete o aquário de uma zona',   check: () => aquariumZonesComplete() >= 1, reward: 50000 },
+    { id: 'aq_full',      name: 'Museu do Oceano',     desc: 'Exponha todas as 25 espécies',     check: () => aquariumCount() >= FISH.length, reward: 2000000 },
 ];
 
 function zoneComplete(z) {
@@ -3587,6 +3654,108 @@ function repositionAchStack() {
 // =================================================================
 let _compFilter = 'all';   // 'all' | 'caught' | 'missing'
 
+// =================================================================
+// AQUÁRIO
+//
+// Depois de maxar tudo (~$10.7M) o dinheiro virava só um contador de
+// pérola. O aquário é o ralo de longo prazo: você paga para expor no
+// aquário cada espécie que já pescou, e cada uma exposta dá bônus
+// permanente de valor. Aproveita o compêndio que já existe e troca
+// "uma barra subindo" por 25 metas concretas.
+//
+// Custo = 250x o valor base do peixe. Dá um modelo mental simples
+// ("custa 250 daquele peixe") e escala sozinho: Sardinha $500,
+// Baleia Azul $40M. Total do aquário cheio: $84M.
+// =================================================================
+
+const AQUARIUM_COST_MULT = 250;
+
+// Bônus por raridade — recompensa quem caça os difíceis
+const AQUARIUM_BONUS = {
+    common: 0.005, uncommon: 0.010, rare: 0.015, epic: 0.025, legendary: 0.040,
+};
+
+// Completar todas as espécies de uma zona dá um extra — vira submeta
+// ("falta só o Kraken pra fechar a Fossa")
+const AQUARIUM_ZONE_BONUS = 0.05;
+
+// Mantém só espécies existentes e já pescadas
+function filterAquarium(aq, caught) {
+    const inAq = (aq && typeof aq === 'object') ? aq : {};
+    const inCaught = (caught && typeof caught === 'object') ? caught : {};
+    const out = {};
+    for (const f of FISH) if (inAq[f.name] && inCaught[f.name]) out[f.name] = true;
+    return out;
+}
+
+function aquariumCost(fish) {
+    return Math.max(100, Math.round(fish.baseValue * AQUARIUM_COST_MULT / 100) * 100);
+}
+
+function isExposed(fish) {
+    return !!(state.aquarium || {})[fish.name];
+}
+
+function aquariumCount() {
+    return Object.keys(state.aquarium || {}).length;
+}
+
+// Espécies de uma zona (pela zona principal, a primeira de `zones`)
+function zoneSpecies(zoneId) {
+    return FISH.filter(f => f.zones[0] === zoneId);
+}
+
+function aquariumZonesComplete() {
+    let done = 0;
+    for (let z = 0; z < ZONES.length; z++) {
+        const list = zoneSpecies(z);
+        if (list.length && list.every(isExposed)) done++;
+    }
+    return done;
+}
+
+// Multiplicador que entra no valor de venda de todo peixe
+function getAquariumMult() {
+    let soma = 0;
+    for (const f of FISH) if (isExposed(f)) soma += AQUARIUM_BONUS[f.rarity] || 0;
+    soma += aquariumZonesComplete() * AQUARIUM_ZONE_BONUS;
+    return 1 + soma;
+}
+
+function buyAquarium(idx) {
+    const f = FISH[idx];
+    if (!f) return;
+    if (!(state._speciesCaught || {})[f.name]) return;    // precisa já ter pescado
+    if (isExposed(f)) return;
+    const custo = aquariumCost(f);
+    if (state.money < custo) {
+        addLogOnce('🏛️ Dinheiro insuficiente para expor no aquário.');
+        return;
+    }
+    const zonasAntes = aquariumZonesComplete();
+
+    state.money -= custo;
+    if (!state.aquarium) state.aquarium = {};
+    state.aquarium[f.name] = true;
+
+    const pct = Math.round((AQUARIUM_BONUS[f.rarity] || 0) * 1000) / 10;
+    SFX.upgrade();
+    addLog(`🏛️ ${f.name} no aquário! +${pct}% de valor permanente.`);
+
+    const zonasDepois = aquariumZonesComplete();
+    if (zonasDepois > zonasAntes) {
+        const z = ZONES[FISH[idx].zones[0]];
+        addLog(`🏛️✨ Aquário de ${z.name} completo! +5% extra.`);
+        rt.cameraShake = 12;
+        vibrate([40, 60, 40]);
+    }
+
+    buildCompendium();
+    updateStats();
+    updateUpgradeCards();
+    saveGame();
+}
+
 function buildCompendium() {
     const grid = document.getElementById('compendiumGrid');
     if (!grid) return;
@@ -3598,11 +3767,18 @@ function buildCompendium() {
         cell.dataset.index = i;
         cell.dataset.caught = caught ? '1' : '0';
         cell.title = caught ? `${f.name} · ${RARITY_LABEL[f.rarity]} · ${fmtMoney(f.baseValue)}` : '???';
+        const exposto = isExposed(f);
+        if (exposto) cell.classList.add('comp-aquario');
+        const pct = Math.round((AQUARIUM_BONUS[f.rarity] || 0) * 1000) / 10;
         cell.innerHTML = `
             <span class="comp-emoji">${caught ? f.emoji : '❓'}</span>
             <span class="comp-rarity comp-rarity-${f.rarity}"></span>
             <span class="comp-name">${caught ? f.name : '???'}</span>
             ${caught ? `<span class="comp-value">${fmtMoney(f.baseValue)}</span>` : ''}
+            ${!caught ? '' : exposto
+                ? `<span class="comp-aq-badge" title="No aquário · +${pct}% de valor">🏛️ +${pct}%</span>`
+                : `<button class="comp-aq-buy" data-aq="${i}"
+                           title="Expor no aquário: +${pct}% de valor permanente">🏛️ ${fmtMoney(aquariumCost(f))}</button>`}
         `;
         grid.appendChild(cell);
     });
@@ -3611,6 +3787,33 @@ function buildCompendium() {
     const total = FISH.length;
     const counter = document.getElementById('compendiumCount');
     if (counter) counter.textContent = `${caught} / ${total} espécies`;
+    renderAquariumSummary();
+}
+
+// Resumo do aquário acima da grade: quantos expostos e o bônus atual
+// Liga/desliga os botões do aquário conforme o dinheiro. Roda no slowUpdate,
+// então é de propósito mais barato que reconstruir os cards.
+function refreshAquariumButtons() {
+    const grid = document.getElementById('compendiumGrid');
+    if (!grid) return;
+    grid.querySelectorAll('.comp-aq-buy').forEach(btn => {
+        const f = FISH[parseInt(btn.dataset.aq, 10)];
+        if (!f) return;
+        const podePagar = state.money >= aquariumCost(f);
+        btn.classList.toggle('aq-ok', podePagar);
+        btn.disabled = !podePagar;
+    });
+}
+
+function renderAquariumSummary() {
+    const el = document.getElementById('aquariumSummary');
+    if (!el) return;
+    const expostos = aquariumCount();
+    const bonus = Math.round((getAquariumMult() - 1) * 1000) / 10;
+    const zonas = aquariumZonesComplete();
+    el.innerHTML = `<strong>🏛️ Aquário</strong> ${expostos}/${FISH.length} expostos` +
+        ` · <span class="aq-bonus">+${bonus}% de valor</span>` +
+        (zonas ? ` · ${zonas} zona${zonas > 1 ? 's' : ''} completa${zonas > 1 ? 's' : ''}` : '');
 }
 
 function applyCompFilter() {
@@ -3653,11 +3856,13 @@ function updateCompendium() {
             cell.appendChild(sp);
         }
     });
+    refreshAquariumButtons();
     const counter = document.getElementById('compendiumCount');
     if (counter) {
         const caught = Object.keys(state._speciesCaught || {}).length;
         counter.textContent = `${caught} / ${FISH.length} espécies`;
     }
+    renderAquariumSummary();
 }
 
 // =================================================================
@@ -3719,7 +3924,9 @@ function updateConsumables() {
         if (buy) buy.disabled = state.money < c.cost;
         const use = document.querySelector(`[data-cons-use="${c.id}"]`);
         if (use) {
-            use.disabled = stock <= 0 || rt.fishingActive;
+            const active = isConsumableActive(c.id);
+            use.disabled = stock <= 0 || rt.fishingActive || active;
+            use.textContent = active ? 'ATIVO' : 'USAR';
             use.dataset.stock = String(stock);   // mostra badge no canto se estoque > 0
         }
     });
@@ -3740,12 +3947,17 @@ function buyConsumable(id) {
 function useConsumable(id) {
     if (rt.fishingActive) return;
     if ((state.consumables?.[id] || 0) <= 0) return;
+    if (!state.consumablesActive) state.consumablesActive = {};
+    if (state.consumablesActive[id]) {
+        addLog('✨ Esse item já está ativo para a próxima sessão.');
+        return;
+    }
     state.consumables[id]--;
-    if (id === 'extraBait')   rt.consumableActive = { type: 'extraBait',   uses: 1 };
-    if (id === 'magnify')     rt.consumableActive = { type: 'magnify',     uses: 1 };
-    if (id === 'chronometer') rt.consumableActive = { type: 'chronometer', uses: 1 };
+    // Um efeito por tipo, empilháveis entre si; sem sobrescrever o anterior
+    state.consumablesActive[id] = true;
     SFX.upgrade();
-    addLog(`✨ Item ativado para a próxima sessão!`);
+    const c = CONSUMABLES.find(x => x.id === id);
+    addLog(`✨ ${c ? c.icon + ' ' + c.name + ' ativado' : 'Item ativado'} para a próxima sessão!`);
     updateConsumables();
 }
 
@@ -3758,6 +3970,7 @@ function openTrophiesModal() {
     const trophies = [
         { icon: '💰', label: 'Total ganho',     value: fmtMoney(state.totalEarned || 0) },
         { icon: '🐟', label: 'Peixes capturados', value: (state.totalFish || 0).toLocaleString('pt-BR') },
+        { icon: '⏱️', label: 'Tempo jogado',    value: fmtPlayTime(state._playTime) },
         { icon: '🦪', label: 'Pérolas',          value: state.pearls || 0 },
         { icon: '🔥', label: 'Maior combo',      value: 'x' + (state._maxCombo || 0) },
         { icon: '🎯', label: 'Maior captura',    value: state._biggestCatch ? `${state._biggestCatch.emoji} ${fmtMoney(state._biggestCatch.value)}` : '—' },
@@ -3920,6 +4133,23 @@ function renderQuests() {
         item.querySelector('.quest-desc').textContent = q.desc;
         list.appendChild(item);
     });
+    updateQuestResetInfo();
+}
+
+// ETA até a próxima renovação: meia-noite seguinte ou 18h desde o sorteio
+// (o maior dos dois — é a regra anti-abuso de relógio).
+function updateQuestResetInfo() {
+    const el = document.getElementById('questResetInfo');
+    if (!el) return;
+    const rolled = state.quests?.rolledAt || 0;
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    const next = Math.max(midnight.getTime(), rolled + 18 * 3600 * 1000);
+    const ms = Math.max(0, next - Date.now());
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const text = `· renova em ${h > 0 ? h + 'h ' : ''}${m}min`;
+    if (el.textContent !== text) el.textContent = text;
 }
 
 // =================================================================
@@ -3984,6 +4214,10 @@ function openPrestigeModal() {
     document.getElementById('prestigeBonusValue').textContent = state.pearlBonuses.value || 0;
     document.getElementById('prestigeBonusSpawn').textContent = state.pearlBonuses.spawn || 0;
     document.getElementById('prestigeBonusMulti').textContent = state.pearlBonuses.multi || 0;
+    const setLvl = (id, v) => { const el = document.getElementById(id); if (el) el.textContent = v || 0; };
+    setLvl('prestigeBonusLegacy', state.pearlBonuses.legacy);
+    setLvl('prestigeBonusChest',  state.pearlBonuses.chest);
+    setLvl('prestigeBonusCalm',   state.pearlBonuses.calm);
     if (modal.classList.contains('show')) return;   // refresh (ex.: buyPearlBonus) sem re-focar
     openModal(modal);
 }
@@ -3995,14 +4229,14 @@ function doPrestige() {
     if (gain <= 0) return;
     if (!confirm(`Vai resetar dinheiro, peixes e melhorias para ganhar ${gain} pérola(s). Bônus permanentes e o compêndio são mantidos. Continuar?`)) return;
     state.pearls += gain;
-    state.money = 0;
+    state.money = getLegacyMoney();   // 💰 Herança
     state.totalFish = 0;
     state.upgrades = { rod: 0, bait: 0, motor: 0, hook: 0, net: 0, value: 0, abyss: 0 };
     state.currentZone = 0;
     state._biggestCatch = null;
     state._maxCombo = 0;
     state.consumables = { extraBait: 0, magnify: 0, chronometer: 0 };
-    rt.consumableActive = null;
+    state.consumablesActive = { extraBait: false, magnify: false, chronometer: false };
     rt.fishingActive = false;
     SFX.catch('legendary');
     rt.cameraShake = 20;
@@ -4016,7 +4250,8 @@ function doPrestige() {
 }
 function buyPearlBonus(type) {
     if (state.pearls <= 0) return;
-    const labels = { value: 'Mercado das Pérolas', spawn: 'Cardume Permanente', multi: 'Anzol Sortudo' };
+    const labels = { value: 'Mercado das Pérolas', spawn: 'Cardume Permanente', multi: 'Anzol Sortudo',
+                     legacy: 'Herança', chest: 'Ímã de Baús', calm: 'Correnteza Calma' };
     if (!confirm(`Gastar 1 Pérola para subir "${labels[type] || type}"? Pérolas são permanentes mas escassas.`)) return;
     state.pearls -= 1;
     state.pearlBonuses[type] = (state.pearlBonuses[type] || 0) + 1;
@@ -4051,12 +4286,17 @@ function loadGame() {
             upgrades:     { ...state.upgrades,     ...(s.upgrades     || {}) },
             pearlBonuses: { ...state.pearlBonuses, ...(s.pearlBonuses || {}) },
             consumables:  { ...state.consumables,  ...(s.consumables  || {}) },
+            consumablesActive: { ...state.consumablesActive, ...(s.consumablesActive || {}) },
             quests:       s.quests || state.quests,
             // Migração: se totalEarned não existe, estima por money + upgrades comprados
             totalEarned:  s.totalEarned ?? s.money ?? 0,
         };
         // Blindagem: zona sempre dentro da faixa válida (evita ZONES[undefined] no boot)
         state.currentZone = Math.max(0, Math.min(ZONES.length - 1, Math.floor(Number(state.currentZone) || 0)));
+        // Aquário: só conta espécie que existe e que foi pescada. sanitizeSave()
+        // cobre só o import, então o carregamento normal precisa filtrar aqui —
+        // senão um save antigo ou com espécie renomeada dá bônus fantasma.
+        state.aquarium = filterAquarium(s.aquarium, state._speciesCaught);
         return true;
     } catch { return false; }
 }
@@ -4072,13 +4312,14 @@ function resetGame() {
         achievements: {},
         _speciesCaught: {},
         _legendaryCaught: false,
+        aquarium: {},
         pearls: 0, totalEarned: 0,
-        pearlBonuses: { value: 0, spawn: 0, multi: 0 },
+        pearlBonuses: { value: 0, spawn: 0, multi: 0, legacy: 0, chest: 0, calm: 0 },
         _biggestCatch: null, _maxCombo: 0, _playTime: 0,
         quests: { date: '', list: [] },
         consumables: { extraBait: 0, magnify: 0, chronometer: 0 },
+        consumablesActive: { extraBait: false, magnify: false, chronometer: false },
     };
-    rt.consumableActive = null;
     rt.fishingActive = false;
     updateUpgradeCards();
     updateZoneCards();
@@ -4130,8 +4371,16 @@ function sanitizeSave(s) {
         return out;
     };
     s.upgrades     = clean(s.upgrades,     ['rod','bait','motor','hook','net','value','abyss']);
-    s.pearlBonuses = clean(s.pearlBonuses, ['value','spawn','multi']);
+    s.pearlBonuses = clean(s.pearlBonuses, ['value','spawn','multi','legacy','chest','calm']);
     s.consumables  = clean(s.consumables,  ['extraBait','magnify','chronometer']);
+
+    // Aquário: mesma regra do carregamento normal
+    s.aquarium = filterAquarium(s.aquarium, s._speciesCaught);
+    s.consumablesActive = {
+        extraBait:   !!(s.consumablesActive && s.consumablesActive.extraBait),
+        magnify:     !!(s.consumablesActive && s.consumablesActive.magnify),
+        chronometer: !!(s.consumablesActive && s.consumablesActive.chronometer),
+    };
     if (!s.quests || typeof s.quests !== 'object' || !Array.isArray(s.quests.list)) {
         s.quests = { date: '', list: [] };
     } else {
@@ -4205,6 +4454,7 @@ function runFrame(now) {
     }
 
     rt.time += delta;
+    state._playTime = (state._playTime || 0) + delta;
 
     tickFishing(now, delta);
     tickCooldown(now);
@@ -4364,6 +4614,12 @@ function slowUpdate() {
     updateUpgradeCards();
     updateConsumables();
     checkAchievements();
+    updateQuestResetInfo();
+    // só varre o aquário com a aba Espécies aberta
+    if (document.querySelector('.tab-pane[data-pane="dex"]')?.classList.contains('active')) {
+        refreshAquariumButtons();
+        renderAquariumSummary();
+    }
     const tp = document.getElementById('topPearls');
     if (tp) tp.textContent = state.pearls || 0;
 }
@@ -4490,6 +4746,11 @@ function init() {
     // Filtros do compêndio
     document.querySelectorAll('.comp-filter-btn').forEach(b => {
         b.addEventListener('click', () => setCompFilter(b.dataset.filter));
+    });
+    // Aquário: delegação na grade, porque os cards são reconstruídos
+    document.getElementById('compendiumGrid')?.addEventListener('click', (e) => {
+        const btn = e.target.closest('.comp-aq-buy');
+        if (btn) buyAquarium(parseInt(btn.dataset.aq, 10));
     });
     // Sistema de abas — clique + navegação por setas (padrão ARIA Tabs)
     const tabEls = Array.from(document.querySelectorAll('.panel-tab'));
